@@ -5,24 +5,33 @@ name: Node.js CI
 
 on:
   push:
-    branches: [ "main", "dev" ]
-  pull_request:
-    branches: [ "main", "dev" ]
+    branches: ["main", "dev"] # PR이 merge되어 main/dev에 반영될 때
+  workflow_dispatch:
 
 jobs:
-  build:
+  deploy-on-merge:
+    if: github.repository == 'selim0915/frontend-study'
     runs-on: ubuntu-latest
+    environment: DevProject # Environment configure name
 
     strategy:
       matrix:
         node-version: [18.19.0]
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Use Node.js ${{ matrix.node-version }}
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
-    - run: npm ci
-    - run: npm -v
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Deploy with secret
+      run: npm run env
+      env:
+        PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}

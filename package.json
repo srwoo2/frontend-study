@@ -4,10 +4,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "echo \"Server Start\" && exit 1",
-    "env": "echo \"token=$PROJECT_TOKEN\" && exit 1"
+    "start": "echo \"Server Start\"",
+    "env": "cross-env echo \"token=$PROJECT_TOKEN\""
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "cross-env": "^7.0.3"
+  }
 }
