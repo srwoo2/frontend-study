@@ -26,5 +26,15 @@
   "author": {
     "name": "세림 우",
     "email": "selim0915@gmail.com"
+  },
+  "flow": {
+    "actions": [
+      {
+        "title": {
+          "en": "Log something to the console"
+        },
+        "id": "log-something-to-the-console"
+      }
+    ]
   }
 }
