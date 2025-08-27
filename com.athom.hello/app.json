@@ -5,11 +5,12 @@
   "compatibility": ">=12.4.0",
   "sdk": 3,
   "platforms": [
-    "local"
+    "local",
+    "cloud"
   ],
   "name": {
     "en": "Hello World",
-    "nl": "Hallo Wereld"
+    "ko": "Hallo Wereld"
   },
   "description": {
     "en": "This is my first app."
