@@ -7,14 +7,15 @@
     "local", "cloud" 
   ],
   "name": {
-    "en": "Hello World",
-    "ko": "Hallo Wereld"
+    "en": "Hello",
+    "ko": "Hallo"
   },
   "description": {
-    "en": "This is my first app."
+    "en": "This is my first app.",
+    "ko": "첫번째 앱입니다."
   },
   "category": [
-    "tools"
+    "appliances"
   ],
   "permissions": [],
   "images": {
@@ -25,5 +26,6 @@
   "author": {
     "name": "세림 우",
     "email": "selim0915@gmail.com"
-  }
+  },
+  "support": "https://example.com/support"
 }

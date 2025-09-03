@@ -1,6 +1,6 @@
 'use strict';
 
-import Homey from 'homey';
+const Homey = require('homey');
 
 class MyApp extends Homey.App {
 
