@@ -9,14 +9,15 @@
     "cloud"
   ],
   "name": {
-    "en": "Hello World",
-    "ko": "Hallo Wereld"
+    "en": "Hello",
+    "ko": "Hallo"
   },
   "description": {
-    "en": "This is my first app."
+    "en": "This is my first app.",
+    "ko": "첫번째 앱입니다."
   },
   "category": [
-    "tools"
+    "appliances"
   ],
   "permissions": [],
   "images": {
@@ -28,6 +29,7 @@
     "name": "세림 우",
     "email": "selim0915@gmail.com"
   },
+  "support": "https://example.com/support",
   "flow": {
     "actions": [
       {
@@ -37,5 +39,40 @@
         "id": "log-something-to-the-console"
       }
     ]
-  }
+  },
+  "drivers": [
+    {
+      "name": {
+        "en": "Light Bulb"
+      },
+      "class": "light",
+      "capabilities": [
+        "dim",
+        "onoff"
+      ],
+      "platforms": [
+        "local",
+        "cloud"
+      ],
+      "images": {
+        "small": "/drivers/light-bulb/assets/images/small.png",
+        "large": "/drivers/light-bulb/assets/images/large.png",
+        "xlarge": "/drivers/light-bulb/assets/images/xlarge.png"
+      },
+      "pair": [
+        {
+          "id": "list_devices",
+          "template": "list_devices",
+          "navigation": {
+            "next": "add_devices"
+          }
+        },
+        {
+          "id": "add_devices",
+          "template": "add_devices"
+        }
+      ],
+      "id": "light-bulb"
+    }
+  ]
 }

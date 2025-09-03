@@ -1,0 +1,9 @@
+{
+  "extends": "@tsconfig/node16/tsconfig.json",
+  "include": ["**/*.js", "**/*.ts", "**/*.json"],
+  "compilerOptions": {
+    "outDir": ".homeybuild/",
+    "sourceMap": true,
+    "resolveJsonModule": true
+  }
+}
