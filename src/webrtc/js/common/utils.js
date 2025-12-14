@@ -63,6 +63,14 @@ const CALL_STATUS = {
   DISCONNECTED:{ text: '종료', class: 'status-disconnected' },
   ERROR:       { text: '오류', class: 'status-error' },
 };
+const WS_STATUS = {
+  IDLE:        { id: 'IDLE',        label: '접속' },
+  WAITING:     { id: 'WAITING',     label: '대기' },
+  CONNECTING:  { id: 'CONNECTING',  label: '연결중' },
+  CONNECTED:   { id: 'CONNECTED',   label: '통화중' },
+  DISCONNECTED:{ id: 'DISCONNECTED',label: '종료' },
+  ERROR:       { id: 'ERROR',       label: '오류'},
+};
 
 /**
  * 상태값을 DOM에 반영하는 공통 함수
@@ -90,4 +98,18 @@ window.applyStatusToDOM = function(target, statusKey, message) {
   } catch (err) {
     console.error('[ERROR] applyStatusToDOM :', err);
   }
+};
+
+/** LOGGING */
+window.log = function(level, msg) {
+  const timestamp = new Date().toISOString();
+  const line = `[${timestamp}] [${level}] ${msg}`;
+  console.log(line);
+
+  fetch(CONFIG.logUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ level, message: msg, timestamp })
+  })
+  .catch(e => console.error('[ERROR] log :', e));
 };
