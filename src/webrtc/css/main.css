@@ -45,6 +45,11 @@ button:hover {
   background: color-mix(in srgb, var(--bg) 80%, black 20%);
 }
 
+button:disabled {
+  background: #000;
+  color: #444;
+}
+
 canvas {
   background-color: #ccc;
   max-width: 100%;
