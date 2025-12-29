@@ -189,12 +189,6 @@
           return resolve();
         }
 
-        if (ws && ws.readyState === WebSocket.CONNECTING) {
-          ws.addEventListener('open', () => resolve());
-          ws.addEventListener('error', (err) => reject(err));
-          return;
-        }
-
         try {
           ws = new WebSocket(CONFIG.wssUrl);
           
@@ -208,8 +202,8 @@
           };
           ws.onerror = (e) => {
             console.log('WebSocket error');
-            handleError(e, startCall);
-            reject(e);
+            const err = new Error('WebSocket error\n서버가 실행 중인지, 혹은 인증서 허용(wss)이 되었는지 확인해 주세요.');
+            reject(err);
           };
           ws.onmessage = async (msg) => {
             try {
