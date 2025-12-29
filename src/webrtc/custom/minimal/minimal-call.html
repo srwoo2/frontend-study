@@ -85,18 +85,18 @@
           break;
         case WS_STATUS.WAITING.id:
           startCallBtn.textContent = '통화 시작';
-          startCallBtn.style.display = 'flex';
-          toggleAudioBtn.style.display = 'flex';
-          toggleCameraBtn.style.display = 'flex';
+          startCallBtn.style.display = 'block';
+          toggleAudioBtn.style.display = 'block';
+          toggleCameraBtn.style.display = 'block';
           break;
         case WS_STATUS.CONNECTING.id:
         case WS_STATUS.CONNECTED.id:
-          endCallBtn.style.display = 'flex';
-          toggleAudioBtn.style.display = 'flex';
-          toggleCameraBtn.style.display = 'flex';
+          endCallBtn.style.display = 'block';
+          toggleAudioBtn.style.display = 'block';
+          toggleCameraBtn.style.display = 'block';
           break;
         case WS_STATUS.ERROR.id:
-          retryBtn.style.display = 'flex';
+          retryBtn.style.display = 'block';
           break;
         case WS_STATUS.DISCONNECTED.id:
         default:

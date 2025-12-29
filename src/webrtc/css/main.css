@@ -16,9 +16,6 @@ button {
   font-size: 1rem;
   font-weight: 500;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   --bg: #ccc;
   --color: #202124;
   background: var(--bg);
