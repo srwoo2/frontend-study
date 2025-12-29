@@ -150,6 +150,21 @@ export class WebRTCPage {
         samplesSection.appendChild(ul);
       });
       container.appendChild(samplesSection);
+
+      const targetToggleBtn = document.createElement('button');
+      targetToggleBtn.textContent = 'Target: _blank'; 
+      targetToggleBtn.id = 'targetToggleBtn';
+      container.appendChild(targetToggleBtn);
+
+      targetToggleBtn.addEventListener('click', () => {
+        const target = targetToggleBtn.textContent === 'Target: _blank' ? '_blank' : '_self';
+        targetToggleBtn.textContent = `Target: ${target}`;
+        
+        const links = document.querySelectorAll('a');
+        links.forEach(link => {
+          link.target = target;
+        });
+      });
   
       app.appendChild(container);
     }

@@ -11,7 +11,7 @@ export class RootPage {
       const app = document.getElementById('app');
       app.innerHTML = `
         <div style="display: flex; flex-direction: column; align-items: center;">
-          <h1>Frontend Study Portal</h1>
+          <h1>Frontend Study</h1>
           <nav>
             <ul style="list-style: decimal-leading-zero; padding: 0; display: flex; flex-direction: column; gap: 15px;">
               <li>
