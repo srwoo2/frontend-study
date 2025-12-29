@@ -1,4 +1,5 @@
 import { routeConfig } from '../route';
+import { Header } from '../layout/Header';
 
 export class WebRTCPage {
     constructor(router, samplePath) {
@@ -7,19 +8,6 @@ export class WebRTCPage {
     }
   
     render() {
-      if (!document.getElementById('webrtc-styles')) {
-        const link1 = document.createElement('link');
-        link1.id = 'webrtc-styles';
-        link1.rel = 'stylesheet';
-        link1.href = '/src/webrtc/css/main.css';
-        document.head.appendChild(link1);
-
-        const link2 = document.createElement('link');
-        link2.rel = 'stylesheet';
-        link2.href = '/src/webrtc/css/toggle-target.css';
-        document.head.appendChild(link2);
-      }
-
       if (this.samplePath) {
         this._renderSampleView();
       } else {
@@ -36,26 +24,11 @@ export class WebRTCPage {
       app.style.flexDirection = 'column';
       app.style.height = '100%';
   
-      const header = document.createElement('header');
-      header.style.padding = '10px';
-      header.style.background = '#f0f0f0';
-      header.style.borderBottom = '1px solid #ccc';
-      header.style.display = 'flex';
-      header.style.justifyContent = 'space-between';
-      header.style.alignItems = 'center';
-      header.style.flexShrink = '0'; // Prevent header from shrinking
-  
-      const backBtn = document.createElement('button');
-      backBtn.textContent = '이전';
-      backBtn.addEventListener('click', () => this.router.navigateTo('/webrtc'));
-      header.appendChild(backBtn);
-  
-      const title = document.createElement('span');
-      title.textContent = `Viewing: ${this.samplePath}`;
-      title.style.fontWeight = 'bold';
-      header.appendChild(title);
-  
-      app.appendChild(header);
+      const headerComp = new Header(this.router, {
+        title: `Viewing: ${this.samplePath.split('/').pop()}`,
+        backPath: '/webrtc'
+      });
+      app.appendChild(headerComp.render());
   
       const iframe = document.createElement('iframe');
       iframe.src = this.samplePath;
@@ -92,21 +65,16 @@ export class WebRTCPage {
       const app = document.getElementById('app');
       app.innerHTML = '';
   
-      // Root Portal Button
-      const header = document.createElement('div');
-      header.style.padding = '10px';
-      const homeBtn = document.createElement('a');
-      homeBtn.textContent = 'Home';
-      homeBtn.href = '/';
-      header.appendChild(homeBtn);
-      app.appendChild(header);
+      // Header
+      const headerComp = new Header(this.router, {
+        title: 'WebRTC Samples',
+        showBackBtn: false
+      });
+      app.appendChild(headerComp.render());
 
+      // Content
       const container = document.createElement('div');
-      container.id = 'container'; // Important for original CSS
-  
-      const title = document.createElement('h1');
-      title.textContent = 'WebRTC samples';
-      container.appendChild(title);
+      container.id = 'container';
   
       const introSection = document.createElement('section');
       introSection.innerHTML = `
@@ -150,7 +118,7 @@ export class WebRTCPage {
         samplesSection.appendChild(ul);
       });
       container.appendChild(samplesSection);
-
+ 
       const targetToggleBtn = document.createElement('button');
       targetToggleBtn.textContent = 'Target: _blank'; 
       targetToggleBtn.id = 'targetToggleBtn';
@@ -184,7 +152,5 @@ export class WebRTCPage {
       parent.appendChild(li);
     }
 
-    unmount() {
-        // Nothing to clean up
-    }
-  }
+    unmount() {}
+}
