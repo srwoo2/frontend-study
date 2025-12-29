@@ -36,6 +36,12 @@
     </div>
   </div>
 
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="spinner"></div>
+    <div class="loading-text">연결 중...</div>
+  </div>
+
   <script>
     const elStatusText = document.getElementById('statusText');
 
@@ -49,8 +55,8 @@
     const retryBtn = document.getElementById('retryBtn');
 
     const CONFIG = {
-      wssUrl: 'wss://192.168.2.95:3001',
-      logUrl: 'https://192.168.2.95:3000/log',
+      wssUrl: `wss://${window.location.hostname}:3001`,
+      logUrl: `https://${window.location.hostname}:3000/log`,
       iceServers: { iceServers: [] },
       connectTimeoutMs: 10000
     };
@@ -84,16 +90,21 @@
         case WS_STATUS.IDLE.id:
           break;
         case WS_STATUS.WAITING.id:
-          startCallBtn.textContent = '통화 시작';
           startCallBtn.style.display = 'block';
           toggleAudioBtn.style.display = 'block';
           toggleCameraBtn.style.display = 'block';
+          
+          // 로딩 레이어 숨김 (필요시)
+          document.getElementById('loadingOverlay').style.display = 'none';
           break;
         case WS_STATUS.CONNECTING.id:
         case WS_STATUS.CONNECTED.id:
           endCallBtn.style.display = 'block';
           toggleAudioBtn.style.display = 'block';
           toggleCameraBtn.style.display = 'block';
+
+          // 연결 성공 또는 진행 중일 때 로딩 레이어 숨김
+          document.getElementById('loadingOverlay').style.display = 'none';
           break;
         case WS_STATUS.ERROR.id:
           retryBtn.style.display = 'block';
@@ -297,7 +308,13 @@
      * 통화 연결 요청
      */
     async function startCall() {
+      const overlay = document.getElementById('loadingOverlay');
+
       try {
+        // 로딩 표시
+        ws_state = WS_STATUS.CONNECTING.id;
+        overlay.style.display = 'flex';
+
         // pc 연결
         ensurePC();
 
@@ -310,7 +327,16 @@
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'offer', offer: pc.localDescription }));
         }
+
+        // 연결 완료 후 레이어 숨김 (또는 oniceconnectionstatechange 에서 처리)
+        // 여기서는 일단 요청 시작 후에는 숨기지 않고 상태 변화를 기다리거나 
+        // 시그널링 완료 시점에 숨깁니다.
+        // connected 상태가 되면 updateUiForState에서 숨겨지도록 구성 가능합니다.
       } catch (e) {
+        // 로딩 해제
+        overlay.style.display = 'none';
+        ws_state = WS_STATUS.IDLE.id;
+
         handleError(e, startCall);
       }
     }
