@@ -1,6 +1,15 @@
-const initGA = () => {
-  const GA_ID = process.env.GA_MEASUREMENT_ID;
+const GA_ID = process.env.GA_MEASUREMENT_ID;
 
+export const trackPageview = (path) => {
+  if (!GA_ID || !window.gtag) return;
+  
+  window.gtag('config', GA_ID, {
+    page_path: path,
+  });
+  console.log(`[GA] Tracked pageview: ${path}`);
+};
+
+const initGA = () => {
   if (!GA_ID) {
     console.warn('GA_MEASUREMENT_ID is not defined');
     return;

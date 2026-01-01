@@ -56,6 +56,12 @@
     </div>
   </div>
 
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="spinner"></div>
+    <div class="loading-text">연결 중...</div>
+  </div>
+
   <script>
     const localVideo = document.getElementById('localVideo');
     const remoteVideo = document.getElementById('remoteVideo');
@@ -163,9 +169,11 @@
             case 'completed':
               setCallStatus('local', 'CONNECTED');
               setCallStatus('remote', 'CONNECTED');
+              document.getElementById('loadingOverlay').style.display = 'none';
               break;
             case 'failed':
               setCallStatus('remote', 'error', '연결 실패');
+              document.getElementById('loadingOverlay').style.display = 'none';
               break;
             case 'disconnected':
             case 'closed':
@@ -274,12 +282,23 @@
      * 통화 연결
      */
     async function startCall() {
+      const overlay = document.getElementById('loadingOverlay');
       try {
+        overlay.style.display = 'flex';
+
         // 권한 확인
         const cameraStatus = await navigator.permissions.query({ name: 'camera' });
         const microphoneStatus = await navigator.permissions.query({ name: 'microphone' });
-        if (cameraStatus.state === 'denied') { alert('카메라 권한이 거부되었습니다.'); return; }
-        if (microphoneStatus.state === 'denied') { alert('마이크 권한이 거부되었습니다.'); return; }
+        if (cameraStatus.state === 'denied') { 
+          overlay.style.display = 'none';
+          alert('카메라 권한이 거부되었습니다.'); 
+          return; 
+        }
+        if (microphoneStatus.state === 'denied') { 
+          overlay.style.display = 'none';
+          alert('마이크 권한이 거부되었습니다.'); 
+          return; 
+        }
 
         // 미디어 장치 연결
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -295,6 +314,7 @@
         setCallStatus('local', 'WAITING');
         setCallStatus('remote', 'IDLE');
       } catch (e) {
+        overlay.style.display = 'none';
         setCallStatus('local', 'error', e.message);
         alert('Error startCamera\n' + e.message);
       }

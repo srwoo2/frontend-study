@@ -1,3 +1,5 @@
+import { Header } from '../layout/Header';
+
 export class RootPage {
     constructor(router) {
       this.router = router;
@@ -9,9 +11,22 @@ export class RootPage {
 
     render() {
       const app = document.getElementById('app');
-      app.innerHTML = `
-        <div style="display: flex; flex-direction: column; align-items: center;">
-          <h1>Frontend Study Portal</h1>
+      app.innerHTML = '';
+
+      // Header
+      const headerComp = new Header(this.router, {
+        title: 'Frontend Study',
+        showBackBtn: false
+      });
+      app.appendChild(headerComp.render());
+
+      // Content
+      const content = document.createElement('div');
+      content.style.padding = '20px';
+      content.style.display = 'flex';
+      content.style.flexDirection = 'column';
+      content.style.alignItems = 'center';
+      content.innerHTML = `
           <nav>
             <ul style="list-style: decimal-leading-zero; padding: 0; display: flex; flex-direction: column; gap: 15px;">
               <li>
@@ -21,8 +36,8 @@ export class RootPage {
               </li>
             </ul>
           </nav>
-        </div>
       `;
+      app.appendChild(content);
 
       document.getElementById('webrtcLink').addEventListener('click', (e) => {
         e.preventDefault();
@@ -31,4 +46,4 @@ export class RootPage {
     }
   
     unmount() {}
-  }
+}

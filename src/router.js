@@ -1,3 +1,5 @@
+import { trackPageview } from './lib/ga';
+
 export class Router {
   constructor(routes) {
     this.routes = routes;
@@ -5,11 +7,11 @@ export class Router {
   }
 
   _loadInitialRoute() {
-    const path = window.location.pathname;
+    const path = window.location.pathname + window.location.search;
     this._loadRoute(path);
 
     window.onpopstate = () => {
-      this._loadRoute(window.location.pathname);
+      this._loadRoute(window.location.pathname + window.location.search);
     };
   }
 
@@ -31,6 +33,9 @@ export class Router {
         instance: routeConfig(this, samplePath)
       };
       this.currentRoute.instance.render();
+      
+      // GA Tracking
+      trackPageview(path);
     } else {
         console.error('No route found for', path);
     }
