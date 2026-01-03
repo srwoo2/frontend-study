@@ -55,14 +55,6 @@ window.clearText = function(id) {
 /**
  * WebRTC 통화 상태를 나타내는 전역 객체
  */
-const CALL_STATUS = {
-  IDLE:        { text: '접속', class: 'status-idle' },
-  WAITING:     { text: '대기', class: 'status-waiting' },
-  CONNECTING:  { text: '연결중', class: 'status-connecting' },
-  CONNECTED:   { text: '통화중', class: 'status-connected' },
-  DISCONNECTED:{ text: '종료', class: 'status-disconnected' },
-  ERROR:       { text: '오류', class: 'status-error' },
-};
 const WS_STATUS = {
   IDLE:        { id: 'IDLE',        label: '접속' },
   WAITING:     { id: 'WAITING',     label: '대기' },
@@ -70,34 +62,6 @@ const WS_STATUS = {
   CONNECTED:   { id: 'CONNECTED',   label: '통화중' },
   DISCONNECTED:{ id: 'DISCONNECTED',label: '종료' },
   ERROR:       { id: 'ERROR',       label: '오류'},
-};
-
-/**
- * 상태값을 DOM에 반영하는 공통 함수
- * @param {string} elementId - 상태를 넣을 DOM 요소 ID
- * @param {string} status - 표시할 상태 문자열
- */
-window.applyStatusToDOM = function(target, statusKey, message) {
-  try {
-    var el = document.getElementById(target + "Status");
-    if (!el) return;
-  
-    var statusInfo = CALL_STATUS[statusKey];
-    
-    if (statusInfo) {
-      el.textContent = statusInfo.text;
-      el.className = statusInfo.class || '';
-    } else {
-      el.textContent = statusKey;
-      el.className = '';
-    }
-
-    if (message) {
-      console.error(`[${target}] 상태 '${statusKey}' 오류 메시지:`, message);
-    }
-  } catch (err) {
-    console.error('[ERROR] applyStatusToDOM :', err);
-  }
 };
 
 /** LOGGING */

@@ -33,13 +33,15 @@
       </button>
     </div>
     <div class="status-pill">
-      <span id="statusText">IDLE</span>
+      <div><span id="statusText">IDLE</span></div>
+      <div style="margin-left: 10px; padding-left: 10px; border-left: 1px solid #555;">WS: <span id="wsStatusText" style="color: red;">disconnected</span></div>
     </div>
   
     <div class="split-container">
       <div class="video-box">
         <div class="label">상대방 (Remote)</div>
         <video id="remoteVideo" autoplay playsinline></video>
+        
         <div id="loadingOverlay" class="loading-overlay" style="display: none;"> <!-- 초기에는 숨김 -->
           <div class="spinner"></div>
         </div>
@@ -63,6 +65,7 @@
 
   <script>
     const elStatusText = document.getElementById('statusText');
+    const elWsStatusText = document.getElementById('wsStatusText');
 
     const localVideo = document.getElementById('localVideo');
     const remoteVideo = document.getElementById('remoteVideo');
@@ -84,11 +87,11 @@
     let pc = null;
     let localStream = null;
     let ws = null;
-    let _ws_state = WS_STATUS.IDLE.id;
+    let _call_state = WS_STATUS.IDLE.id;
     Object.defineProperty(window, 'ws_state', {
-      get: function() { return _ws_state; },
+      get: function() { return _call_state; },
       set: function(val) {
-        _ws_state = val;
+        _call_state = val;
         updateUiForState();
       }
     });
@@ -113,18 +116,12 @@
           startCallBtn.style.display = 'block';
           toggleAudioBtn.style.display = 'block';
           toggleCameraBtn.style.display = 'block';
-          
-          // 로딩 레이어 숨김 (필요시)
-          document.getElementById('loadingOverlay').style.display = 'none';
           break;
         case WS_STATUS.CONNECTING.id:
         case WS_STATUS.CONNECTED.id:
           endCallBtn.style.display = 'block';
           toggleAudioBtn.style.display = 'block';
           toggleCameraBtn.style.display = 'block';
-
-          // 연결 성공 또는 진행 중일 때 로딩 레이어 숨김
-          document.getElementById('loadingOverlay').style.display = 'none';
           break;
         case WS_STATUS.ERROR.id:
           retryBtn.style.display = 'block';
@@ -132,6 +129,14 @@
         case WS_STATUS.DISCONNECTED.id:
         default:
           break;
+      }
+
+      // 로딩 오버레이 제어
+      const overlay = document.getElementById('loadingOverlay');
+      if (stateId === WS_STATUS.CONNECTING.id) {
+        overlay.style.display = 'flex';
+      } else {
+        overlay.style.display = 'none';
       }
     }
 
@@ -225,14 +230,20 @@
           
           ws.onopen = () => {
             console.log('WebSocket connected');
+            elWsStatusText.textContent = 'connected';
+            elWsStatusText.style.color = 'white';
             resolve();
           };
           ws.onclose = () => {
             console.log('WebSocket disconnected');
+            elWsStatusText.textContent = 'disconnected';
+            elWsStatusText.style.color = 'red';
             ws = null; 
           };
           ws.onerror = (e) => {
             console.log('WebSocket error');
+            elWsStatusText.textContent = 'error';
+            elWsStatusText.style.color = 'red';
             const err = new Error('WebSocket error\n서버가 실행 중인지, 혹은 인증서 허용(wss)이 되었는지 확인해 주세요.');
             reject(err);
           };
@@ -328,12 +339,9 @@
      * 통화 연결 요청
      */
     async function startCall() {
-      const overlay = document.getElementById('loadingOverlay');
-
       try {
         // 로딩 표시
         ws_state = WS_STATUS.CONNECTING.id;
-        overlay.style.display = 'flex';
 
         // pc 연결
         ensurePC();
@@ -347,14 +355,7 @@
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'offer', offer: pc.localDescription }));
         }
-
-        // 연결 완료 후 레이어 숨김 (또는 oniceconnectionstatechange 에서 처리)
-        // 여기서는 일단 요청 시작 후에는 숨기지 않고 상태 변화를 기다리거나 
-        // 시그널링 완료 시점에 숨깁니다.
-        // connected 상태가 되면 updateUiForState에서 숨겨지도록 구성 가능합니다.
       } catch (e) {
-        // 로딩 해제
-        overlay.style.display = 'none';
         ws_state = WS_STATUS.IDLE.id;
 
         handleError(e, startCall);
@@ -380,7 +381,6 @@
         }
 
         // 상태별 분기 처리
-        document.getElementById('loadingOverlay').style.display = 'none';
         if (currentState === WS_STATUS.CONNECTING.id) {
           ws_state = WS_STATUS.WAITING.id;
         } else {

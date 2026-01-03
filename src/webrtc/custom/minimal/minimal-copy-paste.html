@@ -9,19 +9,34 @@
       --bg-color: #202124;
       --text: #ffffff;
     }
+    .video-box {
+      position: relative;
+    }
+    #loadingOverlay {
+      position: absolute !important; 
+      top: 0; 
+      left: 0;
+      width: 100%; 
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 5;
+    }
   </style>
 </head>
 <body>
   <div id="container">
     <div class="status-pill">
-      <div>Local: <span id="localStatus">IDLE</span></div>
-      <div style="margin-left: 10px; padding-left: 10px; border-left: 1px solid #555;">Remote: <span id="remoteStatus">IDLE</span></div>
+      <div><span id="localStatus">IDLE</span></div>
     </div>
 
     <div class="split-container">
       <div class="video-box">
         <div class="label">상대방 (Remote)</div>
         <video id="remoteVideo" autoplay playsinline></video>
+
+        <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+          <div class="spinner"></div>
+        </div>
       </div>
       <div class="video-box">
         <div class="label">나 (Local)</div>
@@ -111,20 +126,76 @@
 
     const statusElementMap = {
       local: document.getElementById('localStatus'),
-      remote: document.getElementById('remoteStatus'),
     };
 
     let pc = null;
     let localStream = null;
+    let _call_state = WS_STATUS.IDLE.id;
+    Object.defineProperty(window, 'ws_state', {
+      get: function() { return _call_state; },
+      set: function(val) {
+        _call_state = val;
+        updateUiForState();
+      }
+    });
 
     /**
-     * 카메라/오디오 버튼 관련 상태 업데이트 함수
+     * 연결 상태 UI 표시
      */
-    function updateCallButtons(inCall) {
-      startCallBtn.disabled = inCall;
-      endCallBtn.disabled = !inCall;
-      toggleCameraBtn.disabled = !inCall;
-      toggleAudioBtn.disabled = !inCall;
+    function updateUiForState() {
+      const stateId = WS_STATUS[ws_state].id || '';
+
+      // 상태에 따른 텍스트 표시
+      const statusSpan = document.getElementById('localStatus');
+      statusSpan.textContent = WS_STATUS[ws_state].label || '';
+
+      // 초기화: 모든 버튼 숨김
+      startCallBtn.style.display = 'none';
+      endCallBtn.style.display = 'none';
+      toggleCameraBtn.style.display = 'none';
+      toggleAudioBtn.style.display = 'none';
+      // 수동 모드 버튼들도 숨김/보임 처리 필요? 
+      // minimal-copy-paste는 수동 패널이 따로 있음. 메인 컨트롤 바 버튼만 제어.
+
+      // 상태별 버튼 제어
+      switch (stateId) {
+        case WS_STATUS.IDLE.id:
+          startCallBtn.style.display = 'inline-block';
+          startCallBtn.disabled = false;
+          break;
+
+        case WS_STATUS.WAITING.id:
+          startCallBtn.style.display = 'inline-block';
+          startCallBtn.disabled = false;
+          toggleAudioBtn.style.display = 'inline-block';
+          toggleCameraBtn.style.display = 'inline-block';
+          break;
+
+        case WS_STATUS.CONNECTING.id:
+        case WS_STATUS.CONNECTED.id:
+          endCallBtn.style.display = 'inline-block';
+          endCallBtn.disabled = false;
+          toggleAudioBtn.style.display = 'inline-block';
+          toggleCameraBtn.style.display = 'inline-block';
+          break;
+
+        case WS_STATUS.DISCONNECTED.id:
+        case WS_STATUS.ERROR.id:
+           startCallBtn.style.display = 'inline-block';
+           startCallBtn.disabled = false;
+           break;
+
+         default:
+           break;
+      }
+      
+      // 로딩 오버레이 제어
+      const overlay = document.getElementById('loadingOverlay');
+      if (stateId === WS_STATUS.CONNECTING.id) {
+        overlay.style.display = 'flex';
+      } else {
+        overlay.style.display = 'none';
+      }
     }
 
     /**
@@ -139,9 +210,8 @@
 
         pc.ontrack = (event) => {
           event.streams[0].getTracks().forEach((t) => remoteStream.addTrack(t));
-
-          applyStatusToDOM('remote', 'CONNECTED');
-          applyStatusToDOM('local', 'CONNECTED');
+          
+          ws_state = WS_STATUS.CONNECTED.id;
         };
 
         // 로컬 ICE 후보: 수동 텍스트 + WS 전송 병행
@@ -156,19 +226,17 @@
 
           switch (pc.iceConnectionState) {
             case 'checking':
-              applyStatusToDOM('remote', 'CONNECTING');
               break;
             case 'connected':
             case 'completed':
-              applyStatusToDOM('local', 'CONNECTED');
-              applyStatusToDOM('remote', 'CONNECTED');
+            case 'connected':
+            case 'completed':
+              ws_state = WS_STATUS.CONNECTED.id;
               break;
             case 'failed':
-              applyStatusToDOM('remote', 'ERROR', '연결 실패');
               break;
             case 'disconnected':
             case 'closed':
-              applyStatusToDOM('remote', 'DISCONNECTED');
               endCall(); // 상대방 연결이 끊어지면 내 통화도 종료
               break;
           }
@@ -196,10 +264,11 @@
         localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
 
         // UX 상태 업데이트
-        updateCallButtons(true);
-        applyStatusToDOM('local', 'WAITING');
+        ws_state = WS_STATUS.WAITING.id;
       } catch (e) {
-        applyStatusToDOM('local', 'ERROR', e.message);
+        console.error(e);
+        alert(e.message);
+        ws_state = WS_STATUS.ERROR.id;
       }
     }
     
@@ -219,15 +288,12 @@
       localVideo.srcObject = null;
       remoteVideo.srcObject = null;
 
-      applyStatusToDOM('local', 'DISCONNECTED');
-      applyStatusToDOM('remote', 'DISCONNECTED'); 
+      ws_state = WS_STATUS.DISCONNECTED.id; 
 
       // UI 초기화
       sdpBox.value = '';
       localCandidatesBox.value = '';
       remoteCandidatesBox.value = '';
-
-      updateCallButtons(false);
     }
 
     /**
@@ -259,14 +325,16 @@
       try {
         ensurePC();
 
-        applyStatusToDOM('local', 'CONNECTING');
+        ws_state = WS_STATUS.CONNECTING.id;
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
     
         sdpBox.value = JSON.stringify(pc.localDescription);
       } catch (e) {
-        applyStatusToDOM('local', 'ERROR', e.message);
+        console.error(e);
+        alert(e.message);
+        ws_state = WS_STATUS.ERROR.id;
       }
     };
 
@@ -282,7 +350,8 @@
     
         sdpBox.value = JSON.stringify(pc.localDescription);
       } catch (e) {
-        applyStatusToDOM('local', 'ERROR', e.message);
+        console.error(e);
+        alert(e.message);
       }
     }
 
@@ -293,7 +362,8 @@
         await pc.setRemoteDescription(new RTCSessionDescription(remoteAnswer));
         alert('Remote Answer 적용 완료!');
       } catch (e) {
-        applyStatusToDOM('local', 'ERROR', e.message);
+        console.error(e);
+        alert(e.message);
       }
     }
 
@@ -311,14 +381,14 @@
         }
         alert('Remote ICE candidates 적용 완료!');
       } catch (e) {
-        applyStatusToDOM('local', 'ERROR', e.message);
+        console.error(e);
+        alert(e.message);
       }
     }
 
     window.addEventListener('DOMContentLoaded', () => {
       // UX 상태 업데이트
-      updateCallButtons(false);
-      applyStatusToDOM('local', 'IDLE');
+      ws_state = WS_STATUS.IDLE.id;
     });
   </script>
 </body>

@@ -9,13 +9,24 @@
       --bg-color: #202124;
       --text: #ffffff;
     }
+    .video-box {
+      position: relative;
+    }
+    #loadingOverlay {
+      position: absolute !important; 
+      top: 0; 
+      left: 0;
+      width: 100%; 
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 5;
+    }
   </style>
 </head>
 <body>
   <div id="container">
     <div class="status-pill">
-      <div>Local: <span id="localStatus">IDLE</span></div>
-      <div style="margin-left: 10px; padding-left: 10px; border-left: 1px solid #555;">Remote: <span id="remoteStatus">IDLE</span></div>
+      <div><span id="localStatus">IDLE</span></div>
       <div style="margin-left: 10px; padding-left: 10px; border-left: 1px solid #555;">WS: <span id="wsStatus" style="color: red;">disconnected</span></div>
     </div>
 
@@ -23,6 +34,10 @@
       <div class="video-box">
         <div class="label">상대방 (Remote)</div>
         <video id="remoteVideo" autoplay playsinline></video>
+        
+        <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+          <div class="spinner"></div>
+        </div>
       </div>
       <div class="video-box">
         <div class="label">나 (Local)</div>
@@ -56,17 +71,12 @@
     </div>
   </div>
 
-  <!-- Loading Overlay -->
-  <div id="loadingOverlay" class="loading-overlay">
-    <div class="spinner"></div>
-    <div class="loading-text">연결 중...</div>
-  </div>
+
 
   <script>
     const localVideo = document.getElementById('localVideo');
     const remoteVideo = document.getElementById('remoteVideo');
     const localStatus = document.getElementById('localStatus');
-    const remoteStatus = document.getElementById('remoteStatus');
 
     const startCallBtn = document.getElementById('startCallBtn');
     const endCallBtn = document.getElementById('endCallBtn');
@@ -78,9 +88,14 @@
 
     const configuration = { iceServers: [] };
 
-    let pc;
-    let localStream;
-    let ws = null;
+    let _call_state = WS_STATUS.IDLE.id;
+    Object.defineProperty(window, 'ws_state', {
+      get: function() { return _call_state; },
+      set: function(val) {
+        _call_state = val;
+        updateUiForState();
+      }
+    });
 
     /**
      * socket 연결 상태 업데이트 함수
@@ -92,48 +107,80 @@
     }
 
     /**
-     * 통화 연결 상태 함수
+     * 연결 상태 UI 표시
      */
-    function setCallStatus(who, status, message) {
-      const statusSpan = who === 'local' ? localStatus : remoteStatus;
-      const statusMap = {
-        IDLE: { text: '대기중', className: 'status-idle' },
-        WAITING: { text: '접속', className: 'status-waiting' },
-        CONNECTING: { text: '연결 시도 중', className: 'status-connecting' },
-        CONNECTED: { text: '통화 중', className: 'status-connected' },
-        DISCONNECTED: { text: '통화 종료', className: 'status-disconnected' },
-        error: { text: '오류', className: 'status-error' },
-      };
-      const { text, className } = statusMap[status] || { text: message || status, className: '' };
-      statusSpan.textContent = text + (message ? ` (${message})` : '');
-      statusSpan.className = className;
+    function updateUiForState() {
+      const stateId = WS_STATUS[ws_state].id || '';
 
-      // 상태를 상대방에게 전송
-      if (who === 'local' && ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'status', status }));
+      // 상태에 따른 텍스트 표시
+      const statusSpan = document.getElementById('localStatus');
+      statusSpan.textContent = WS_STATUS[ws_state].label || '';
+
+      // 초기화: 모든 버튼 숨김
+      startCallBtn.style.display = 'none';
+      endCallBtn.style.display = 'none';
+      toggleCameraBtn.style.display = 'none';
+      toggleAudioBtn.style.display = 'none';
+      connectWsBtn.style.display = 'none';
+      createOfferBtns.forEach(btn => btn.style.display = 'none');
+
+      // 상태별 버튼 제어
+      switch (stateId) {
+        case WS_STATUS.IDLE.id:
+          // IDLE 상태에서도 WS 연결이나 Offer 생성은 가능해야 함 (수동/WS 모드 특성상)
+          connectWsBtn.style.display = 'inline-block';
+          connectWsBtn.disabled = false;
+          // startCall은 미디어 권한 획득 등을 포함하므로 WAITING으로 가는 진입점 역할
+          startCallBtn.style.display = 'inline-block'; 
+          startCallBtn.disabled = false;
+          break;
+
+        case WS_STATUS.WAITING.id:
+          // 대기 상태: 통화 시작 가능
+          startCallBtn.style.display = 'inline-block';
+          startCallBtn.disabled = false;
+          toggleAudioBtn.style.display = 'inline-block';
+          toggleCameraBtn.style.display = 'inline-block';
+          connectWsBtn.style.display = 'inline-block';
+          connectWsBtn.disabled = false;
+          createOfferBtns.forEach(btn => {
+             btn.style.display = 'inline-block';
+             btn.disabled = false;
+          });
+          break;
+
+        case WS_STATUS.CONNECTING.id:
+        case WS_STATUS.CONNECTED.id:
+          endCallBtn.style.display = 'inline-block';
+          endCallBtn.disabled = false;
+          toggleAudioBtn.style.display = 'inline-block';
+          toggleCameraBtn.style.display = 'inline-block';
+          
+          // 연결 중/통화 중에는 WS 연결/Offer 생성 숨김
+          connectWsBtn.style.display = 'none'; 
+          createOfferBtns.forEach(btn => btn.style.display = 'none');
+          break;
+
+        case WS_STATUS.DISCONNECTED.id:
+        case WS_STATUS.ERROR.id:
+          // 종료/오류 시 다시 시작 가능하도록
+          startCallBtn.style.display = 'inline-block';
+          startCallBtn.disabled = false;
+          connectWsBtn.style.display = 'inline-block';
+          connectWsBtn.disabled = false;
+          break;
+
+         default:
+           break;
       }
-    }
 
-    /**
-     * WebRTC 버튼 관련 상태 업데이트 함수
-     * @param {boolean} disable - true이면 "Start Camera"를 제외한 모든 버튼을 비활성화,
-     *                            false이면 카메라가 켜지면 모든 버튼을 활성화
-     */
-    function setButtonsDisabled(disabled) {
-      connectWsBtn.disabled = disabled;
-      if (createOfferBtns) {
-        createOfferBtns.forEach(btn => btn.disabled = disabled);
+      // 로딩 오버레이 제어
+      const overlay = document.getElementById('loadingOverlay');
+      if (stateId === WS_STATUS.CONNECTING.id) {
+        overlay.style.display = 'flex';
+      } else {
+        overlay.style.display = 'none';
       }
-    }
-
-    /**
-     * 카메라/오디오 버튼 관련 상태 업데이트 함수
-     */
-    function updateCallButtons(inCall) {
-      startCallBtn.disabled = inCall;
-      endCallBtn.disabled = !inCall;
-      toggleCameraBtn.disabled = !inCall;
-      toggleAudioBtn.disabled = !inCall;
     }
 
     /**
@@ -163,21 +210,16 @@
           console.log('ICE state:', pc.iceConnectionState);
           switch (pc.iceConnectionState) {
             case 'checking':
-              setCallStatus('remote', 'CONNECTING');
               break;
             case 'connected':
             case 'completed':
-              setCallStatus('local', 'CONNECTED');
-              setCallStatus('remote', 'CONNECTED');
-              document.getElementById('loadingOverlay').style.display = 'none';
+              ws_state = WS_STATUS.CONNECTED.id;
               break;
             case 'failed':
-              setCallStatus('remote', 'error', '연결 실패');
-              document.getElementById('loadingOverlay').style.display = 'none';
+              ws_state = WS_STATUS.ERROR.id;
               break;
             case 'disconnected':
             case 'closed':
-              setCallStatus('remote', 'DISCONNECTED');
               endCall(); // 상대방 연결이 끊어지면 내 통화도 종료
               break;
           }
@@ -228,7 +270,9 @@
             ensurePC();
 
             if (data.type === 'offer') {
-              setCallStatus('remote', 'CONNECTING');
+               // Offer 수신 시 자동으로 응답 과정이 진행되므로 CONNECTING 상태로 전환
+              ws_state = WS_STATUS.CONNECTING.id;
+
               await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
               const answer = await pc.createAnswer();
               await pc.setLocalDescription(answer);
@@ -250,7 +294,7 @@
             }
 
             if (data.type === 'status') {
-              setCallStatus('remote', data.status);
+              // Remote 상태 표시는 제거됨
             }
           } catch (e) {
             console.error('WS message handling error:', e);
@@ -309,14 +353,11 @@
         localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
 
         // UX 상태 업데이트
-        setButtonsDisabled(false);
-        updateCallButtons(true);
-        setCallStatus('local', 'WAITING');
-        setCallStatus('remote', 'IDLE');
+        ws_state = WS_STATUS.WAITING.id;
       } catch (e) {
-        overlay.style.display = 'none';
-        setCallStatus('local', 'error', e.message);
-        alert('Error startCamera\n' + e.message);
+        console.error(e);
+        alert('Error startCall\n' + e.message);
+        ws_state = WS_STATUS.ERROR.id;
       }
     }
     
@@ -335,11 +376,7 @@
       localVideo.srcObject = null;
       remoteVideo.srcObject = null;
 
-      setCallStatus('local', 'DISCONNECTED');
-      setCallStatus('remote', 'DISCONNECTED'); 
-
-      setButtonsDisabled(true);
-      updateCallButtons(false);
+      ws_state = WS_STATUS.DISCONNECTED.id; 
     }
 
     /**
@@ -371,7 +408,7 @@
     async function handleCreateOffer() {
       try {
         ensurePC();
-        setCallStatus('local', 'CONNECTING');
+        ws_state = WS_STATUS.CONNECTING.id;
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
     
@@ -386,10 +423,7 @@
     
     window.addEventListener('DOMContentLoaded', () => {
       // UX 상태 업데이트
-      setButtonsDisabled(true);
-      updateCallButtons(false);
-      setCallStatus('local', 'IDLE');
-      setCallStatus('remote', 'IDLE');
+      ws_state = WS_STATUS.IDLE.id;
     });
   </script>
 </body>
