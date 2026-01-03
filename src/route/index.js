@@ -5,7 +5,6 @@ export const routeConfig = [
       { text: 'Minimal-copy-paste', href: '/src/webrtc/custom/minimal/minimal-copy-paste.html' },
       { text: 'Minimal-call', href: '/src/webrtc/custom/minimal/minimal-call.html' },
       { text: 'Minimal-room', href: '/src/webrtc/custom/minimal/minimal-room.html' },
-      { text: 'Basic peer connection demo + Signaling', href: '/src/webrtc/custom/pc1/?signaling=ws' },
     ]
   },
   {
