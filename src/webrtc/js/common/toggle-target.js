@@ -1,26 +1,39 @@
-(function() {
-    var btn = document.getElementById('targetToggleBtn');
-    if (!btn) return;
+export function createTargetToggleBtn(onTargetChange, initialTarget = '_blank') {
+  const btn = document.createElement('button');
+  btn.id = 'targetToggleBtn';
+  btn.textContent = `Target: ${initialTarget}`;
+  
+  let currentTarget = initialTarget;
 
-    var base = document.querySelector('base');
-    var isNewTab = !base || base.getAttribute('target') !== '_self';
-    
-    function updateState() {
-        if (isNewTab) {
-            if (base) base.setAttribute('target', '_blank');
-            btn.textContent = 'Target: _blank';
-            btn.classList.remove('self-target');
-        } else {
-            if (base) base.setAttribute('target', '_self');
-            btn.textContent = 'Target: _self';
-            btn.classList.add('self-target');
-        }
+  btn.addEventListener('click', () => {
+    currentTarget = currentTarget === '_blank' ? '_self' : '_blank';
+    btn.textContent = `Target: ${currentTarget}`;
+
+    // 콜백 호출
+    if (onTargetChange && typeof onTargetChange === 'function') {
+      onTargetChange(currentTarget);
     }
+  });
 
-    btn.addEventListener('click', function() {
-        isNewTab = !isNewTab;
-        updateState();
-    });
+  return btn;
+}
 
-    updateState();
-})();
+export function createLinkItem(parent, text, href, router, basePath = '/webrtc') {
+  const li = document.createElement('li');
+  const a = document.createElement('a');
+  a.textContent = text;
+  
+  const targetUrl = `${basePath}?path=${encodeURIComponent(href)}`;
+  a.href = targetUrl;
+  a.target = '_blank';
+  
+  a.addEventListener('click', (e) => {
+    if (a.target !== '_blank') {
+      e.preventDefault();
+      router.navigateTo(targetUrl);
+    }
+  });
+
+  li.appendChild(a);
+  parent.appendChild(li);
+}

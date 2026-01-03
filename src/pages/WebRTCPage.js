@@ -1,5 +1,6 @@
 import { routeConfig } from '../route';
 import { Header } from '../layout/Header';
+import { createTargetToggleBtn, createLinkItem } from '../webrtc/js/common/toggle-target.js';
 
 export class WebRTCPage {
     constructor(router, samplePath) {
@@ -113,43 +114,22 @@ export class WebRTCPage {
   
         const ul = document.createElement('ul');
         section.items.forEach(item => {
-           this._createLinkItem(ul, item.text, item.href);
+           createLinkItem(ul, item.text, item.href, this.router, '/webrtc');
         });
         samplesSection.appendChild(ul);
       });
       container.appendChild(samplesSection);
  
-      const targetToggleBtn = document.createElement('button');
-      targetToggleBtn.textContent = 'Target: _blank'; 
-      targetToggleBtn.id = 'targetToggleBtn';
-      container.appendChild(targetToggleBtn);
-
-      targetToggleBtn.addEventListener('click', () => {
-        const target = targetToggleBtn.textContent === 'Target: _blank' ? '_blank' : '_self';
-        targetToggleBtn.textContent = `Target: ${target}`;
-        
+      const targetToggleBtn = createTargetToggleBtn((target) => {
         const links = document.querySelectorAll('a');
         links.forEach(link => {
           link.target = target;
         });
       });
+      container.appendChild(targetToggleBtn);
   
+      // 최종 렌더링
       app.appendChild(container);
-    }
-  
-    _createLinkItem(parent, text, href) {
-      const li = document.createElement('li');
-      const a = document.createElement('a');
-      a.textContent = text;
-      a.href = href;
-      
-      a.addEventListener('click', (e) => {
-        e.preventDefault();
-        this.router.navigateTo(`/webrtc?path=${encodeURIComponent(href)}`);
-      });
-  
-      li.appendChild(a);
-      parent.appendChild(li);
     }
 
     unmount() {}
