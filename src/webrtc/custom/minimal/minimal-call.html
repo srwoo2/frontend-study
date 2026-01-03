@@ -8,6 +8,18 @@
       --bg-color: #202124;
       --text: #ffffff;
     }
+    .video-box {
+      position: relative;
+    }
+    #loadingOverlay {
+      position: absolute !important; 
+      top: 0; 
+      left: 0;
+      width: 100%; 
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 5;
+    }
   </style>
 </head>
 <body>
@@ -28,6 +40,9 @@
       <div class="video-box">
         <div class="label">상대방 (Remote)</div>
         <video id="remoteVideo" autoplay playsinline></video>
+        <div id="loadingOverlay" class="loading-overlay" style="display: none;"> <!-- 초기에는 숨김 -->
+          <div class="spinner"></div>
+        </div>
       </div>
       <div class="video-box">
         <div class="label">나 (Local)</div>
@@ -44,11 +59,7 @@
     </div>
   </div>
 
-  <!-- Loading Overlay -->
-  <div id="loadingOverlay" class="loading-overlay">
-    <div class="spinner"></div>
-    <div class="loading-text">연결 중...</div>
-  </div>
+
 
   <script>
     const elStatusText = document.getElementById('statusText');
@@ -355,23 +366,33 @@
      */
     function endCall() {
       try {
+        const currentState = ws_state;
+
         // pc 해제
         if (pc) {
           pc.close();
           pc = null;
         }
 
-        // 로컬 미디어 해제
-        if (localStream) {
-          localStream.getTracks().forEach(track => track.stop());
-          localStream = null;
-        }
-        localVideo.srcObject = null;
-
         // 소켓 해제
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.close();
         }
+
+        // 상태별 분기 처리
+        document.getElementById('loadingOverlay').style.display = 'none';
+        if (currentState === WS_STATUS.CONNECTING.id) {
+          ws_state = WS_STATUS.WAITING.id;
+        } else {
+          // 로컬 미디어 해제
+          if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+            localStream = null;
+          }
+
+          localVideo.srcObject = null;
+        }
+
       } catch (e) {
         handleError(e);
       }
