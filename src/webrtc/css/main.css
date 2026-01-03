@@ -8,6 +8,12 @@ html, body, #app {
   color: var(--text);
 }
 
+@media (max-width: 480px) {
+  html {
+    font-size: 14px;
+  }
+}
+
 div#container {
   width: 100%;
   max-width: 60em;
@@ -67,19 +73,10 @@ p.borderBelow {
   padding: 0 0 20px 0;
 }
 
-section p:last-of-type {
-  margin: 0;
-}
 
 section {
   border-bottom: 1px solid #eee;
-  margin: 0 0 30px 0;
-  padding: 0 0 20px 0;
-}
-
-section:last-of-type {
-  border-bottom: none;
-  padding: 0 0 1em 0;
+  padding: 10px 20px;
 }
 
 select {
@@ -92,7 +89,7 @@ a {
   color: #1D6EEE;
   font-weight: 300;
   text-decoration: none;
-  white-space: nowrap;
+  word-break: break-all;
 }
 
 a:hover {
@@ -248,14 +245,16 @@ code {
 }
 
 .control-bar {
-  height: 80px;
+  min-height: 80px;
+  height: auto;
+  padding: 10px 20px;
   background: #202124;
   border-top: 1px solid #3c4043;
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: 16px;
-  padding: 0 20px;
+  gap: 5px 16px;
 }
 
 /**
@@ -330,8 +329,9 @@ code {
 * Common Button
 */
 button {
-  height: 48px;
-  padding: 0 24px;
+  height: auto;
+  max-height: 48px;
+  padding: 10px 20px;
   border-radius: 24px;
   border: none;
   font-size: 1rem;
@@ -344,6 +344,9 @@ button {
   transition: background 0.2s;
 }
 
+.btn-small {
+  font-size: 0.8rem;
+}
 .btn-primary {
   --bg: #8ab4f8;
   --color: #202124;
