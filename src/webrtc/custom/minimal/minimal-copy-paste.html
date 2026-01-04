@@ -189,10 +189,10 @@
       const microphoneStatus = await navigator.permissions.query({ name: 'microphone' });
 
       if (cameraStatus.state === 'denied') {
-        throw new Error('카메라 권한을 확인해 주세요.');
+        throw new Error(ERRORS.CAMERA_PERMISSION);
       }
       if (microphoneStatus.state === 'denied') {
-        throw new Error('마이크 권한을 확인해 주세요.');
+        throw new Error(ERRORS.MIC_PERMISSION);
       }
     }
 
@@ -208,10 +208,10 @@
       const hasMic = devices.some(d => d.kind === 'audioinput');
 
       if (!hasCamera) {
-        throw new Error('연결된 카메라가 없습니다.');
+        throw new Error(ERRORS.NO_CAMERA);
       }
       if (!hasMic) {
-        throw new Error('연결된 마이크가 없습니다.');
+        throw new Error(ERRORS.NO_MIC);
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -406,31 +406,7 @@
         alert(e.message);
       }
     }
-
-    /**
-     * 공통 에러 핸들러
-     * @param {Error} e 에러 객체
-     * @param {Function} retryAction 재시도 시 실행할 함수 (옵션)
-     */
-    function handleError(e, retryAction) {
-      ws_state = WS_STATUS.ERROR.id;
-
-      const msg = e.message || e;
-      alert(msg);
-
-      if (retryAction && typeof retryAction === 'function') {
-        retryBtn.onclick = async () => {
-          try {
-            await retryAction();
-          } catch (err) {
-            handleError(err, retryAction);
-          }
-        };
-      } else {
-        retryBtn.onclick = enterWaitingState; 
-      }
-    }
-
+    
     window.onload = () => {
       updateUiForState();
       enterWaitingState();

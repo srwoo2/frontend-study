@@ -29,7 +29,7 @@
         id="approveCertBtn" 
         class="btn-small" 
         onclick="window.open(CONFIG.wssCertUrl, '', 'width=800,height=600')">
-        WSS 인증서
+        인증서 허용(wss)
       </button>
     </div>
 
@@ -140,8 +140,25 @@
         overlay.style.display = 'none';
       }
     }
-
     
+    /**
+     * 미디어 장치 제어
+     * @param {string} type 'video' | 'audio'
+     */
+    function toggleMedia(type) {
+      if (!localStream) return;
+
+      const isVideo = type === 'video';
+      const tracks = isVideo ? localStream.getVideoTracks() : localStream.getAudioTracks();
+      const track = tracks[0];
+
+      if (track) {
+        track.enabled = !track.enabled;
+        const btn = isVideo ? toggleCameraBtn : toggleAudioBtn;
+        const label = isVideo ? '카메라' : '마이크';
+        btn.textContent = `${label} ${track.enabled ? 'On' : 'Off'}`;
+      }
+    }
     
     /**
      * 카메라/마이크 권한 요청
@@ -151,10 +168,10 @@
       const microphoneStatus = await navigator.permissions.query({ name: 'microphone' });
 
       if (cameraStatus.state === 'denied') {
-        throw new Error('카메라 권한을 확인해 주세요.');
+        throw new Error(ERRORS.CAMERA_PERMISSION);
       }
       if (microphoneStatus.state === 'denied') {
-        throw new Error('마이크 권한을 확인해 주세요.');
+        throw new Error(ERRORS.MIC_PERMISSION);
       }
     }
 
@@ -170,10 +187,10 @@
       const hasMic = devices.some(d => d.kind === 'audioinput');
 
       if (!hasCamera) {
-        throw new Error('연결된 카메라가 없습니다.');
+        throw new Error(ERRORS.NO_CAMERA);
       }
       if (!hasMic) {
-        throw new Error('연결된 마이크가 없습니다.');
+        throw new Error(ERRORS.NO_MIC);
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -261,12 +278,12 @@
      * 시그널링 서버 연결
      */
     async function connectWss() {
-      return new Promise((resolve, reject) => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          return resolve();
-        }
+      try {
+        await new Promise((resolve, reject) => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            return resolve();
+          }
 
-        try {
           ws = new WebSocket(CONFIG.wssUrl);
           
           ws.onopen = () => {
@@ -283,10 +300,7 @@
           };
           ws.onerror = (e) => {
             console.log('WebSocket error');
-            elWsStatusText.textContent = 'error';
-            elWsStatusText.style.color = 'red';
-            const err = new Error('WebSocket error\n서버가 실행 중인지, 혹은 인증서 허용(wss)이 되었는지 확인해 주세요.');
-            reject(err);
+            reject(e);
           };
           ws.onmessage = async (msg) => {
             try {
@@ -317,11 +331,13 @@
               console.error('WS message handling error:', e);
             }
           };
-        } catch (e) {
-          console.error('WS 연결 실패: ' + e.message);
-          reject(e);
-        }
-      });
+        });
+      } catch (e) {
+        elWsStatusText.textContent = 'disconnected';
+        elWsStatusText.style.color = 'red';
+        console.error('WS 연결 실패: ' + e);
+        throw new Error(ERRORS.WS_ERROR);
+      }
     }
 
     /**
@@ -400,51 +416,7 @@
         handleError(e, enterWaitingState);
       }
     }
-
-    /**
-     * 미디어 장치 제어
-     * @param {string} type 'video' | 'audio'
-     */
-    function toggleMedia(type) {
-      if (!localStream) return;
-
-      const isVideo = type === 'video';
-      const tracks = isVideo ? localStream.getVideoTracks() : localStream.getAudioTracks();
-      const track = tracks[0];
-
-      if (track) {
-        track.enabled = !track.enabled;
-        const btn = isVideo ? toggleCameraBtn : toggleAudioBtn;
-        const label = isVideo ? '카메라' : '마이크';
-        btn.textContent = `${label} ${track.enabled ? 'On' : 'Off'}`;
-      }
-    }
-
-    /**
-     * 공통 에러 핸들러
-     * @param {Error} e 에러 객체
-     * @param {Function} retryAction 재시도 시 실행할 함수 (옵션)
-     */
-    function handleError(e, retryAction) {
-      ws_state = WS_STATUS.ERROR.id;
-
-      const msg = e.message || e;
-      alert(msg);
-      log('ERROR', msg);
-
-      if (retryAction && typeof retryAction === 'function') {
-        retryBtn.onclick = async () => {
-          try {
-            await retryAction();
-          } catch (err) {
-            handleError(err, retryAction);
-          }
-        };
-      } else {
-        retryBtn.onclick = enterWaitingState; 
-      }
-    }
-
+    
     window.onload = () => {
       updateUiForState();
       enterWaitingState();
