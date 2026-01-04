@@ -26,7 +26,7 @@
 <body>
   <div id="container">
     <div class="status-pill">
-      <div><span id="localStatus">IDLE</span></div>
+      <div><span id="statusText">IDLE</span></div>
     </div>
 
     <div class="split-container">
@@ -45,17 +45,17 @@
     </div>
 
     <div class="control-bar">
-      <button id="startCallBtn" class="btn-primary" onclick="startCall()">통화 연결</button>
-      <button id="endCallBtn" class="btn-danger" onclick="endCall(); disconnectWss();" disabled>통화 종료</button>
-      <button id="toggleCameraBtn" class="btn-secondary" onclick="toggleCamera()" disabled>카메라</button>
-      <button id="toggleAudioBtn" class="btn-secondary" onclick="toggleAudio()" disabled>오디오</button>
-      <button class="btn-secondary" onclick="document.getElementById('manualPanel').style.display = 'block'">수동 설정</button>
+      <button id="startCallBtn" class="btn-primary" onclick="document.getElementById('manualPanel').style.display = 'block'">수동 통화 시작</button>
+      <button id="endCallBtn" class="btn-danger" onclick="endCall(); disconnectWss();" style="display:none">통화 종료</button>
+      <button id="toggleCameraBtn" class="btn-secondary" onclick="toggleMedia('video')" style="display:none">카메라 On</button>
+      <button id="toggleAudioBtn" class="btn-secondary" onclick="toggleMedia('audio')" style="display:none">마이크 On</button>
+      <button id="retryBtn" class="btn-primary" onclick="enterWaitingState()" style="display:none">다시 연결</button>
     </div>
 
-    <div id="manualPanel" class="panel" style="display: none; position: absolute; top: 10%; left: 10%; width: 80%; height: 80%; background: rgba(32, 33, 36, 0.95); z-index: 100; overflow-y: auto; border: 1px solid #444; color: #fff; padding: 20px;">
+    <div id="manualPanel" class="panel" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; background: rgba(32, 33, 36, 0.95); z-index: 100;">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; margin-bottom: 15px; padding-bottom: 10px;">
-        <h3 style="margin: 0;">수동 WebRTC 연결</h3>
-        <button class="btn-secondary" style="height: 32px; padding: 0 16px;" onclick="document.getElementById('manualPanel').style.display = 'none'">닫기</button>
+        <h3 style="margin: 0;">수동 WebRTC 연결 방법</h3>
+        <button class="btn-small" onclick="document.getElementById('manualPanel').style.display = 'none'">닫기</button>
       </div>
       
       <p class="sub-text" style="color: #aaa;">
@@ -65,11 +65,11 @@
         - A의 ICE Candidates → B의 Remote ICE Candidates에 붙여넣고 “Add Remote ICE Candidates” 클릭<br/>
       </p>
 
-      <div class="row" style="margin: 20px 0;">
-        <button class="btn-primary" style="height: 40px;" onclick="handleCreateOffer()">Create Offer</button>
-        <button id="createAnswer" class="btn-primary" style="height: 40px;" onclick="handleCreateAnswer()">Create Answer</button>
-        <button id="setRemoteAnswer" class="btn-primary" style="height: 40px;" onclick="handleSetRemoteAnswer()">Set Remote Answer</button>
-        <button id="addRemoteCandidates" class="btn-primary" style="height: 40px;" onclick="handleAddRemoteCandidates()">Add Remote ICE Candidates</button>
+      <div class="row">
+        <button id="createOffer" class="btn-primary" onclick="handleCreateOffer()">Create Offer</button>
+        <button id="createAnswer" class="btn-primary" onclick="handleCreateAnswer()">Create Answer</button>
+        <button id="setRemoteAnswer" class="btn-primary" onclick="handleSetRemoteAnswer()">Set Remote Answer</button>
+        <button id="addRemoteCandidates" class="btn-primary" onclick="handleAddRemoteCandidates()">Add Remote ICE Candidates</button>
       </div>
 
       <div class="row">
@@ -80,7 +80,7 @@
             <button class="btn-secondary" onclick="pasteText('sdpBox')">붙여넣기</button>
             <button class="btn-secondary" onclick="clearText('sdpBox')">지우기</button>
           </div>
-          <textarea id="sdpBox" style="background: #111; color: #0f0; padding: 10px; border: 1px solid #555; height: 120px;"></textarea>
+          <textarea id="sdpBox" style="height: 120px; background: #111; color: #0f0;"></textarea>
         </div>
         <div class="col">
           <h4>Local ICE Candidates</h4>
@@ -89,7 +89,7 @@
             <button class="btn-secondary" onclick="pasteText('localCandidatesBox')">붙여넣기</button>
             <button class="btn-secondary" onclick="clearText('localCandidatesBox')">지우기</button>
           </div>
-          <textarea id="localCandidatesBox" style="background: #111; color: #0f0; padding: 10px; border: 1px solid #555; height: 120px;"></textarea>
+          <textarea id="localCandidatesBox" style="height: 120px; background: #111; color: #0f0;"></textarea>
         </div>
         <div class="col">
           <h4>Remote ICE Candidates</h4>
@@ -98,13 +98,17 @@
             <button class="btn-secondary" onclick="pasteText('remoteCandidatesBox')">붙여넣기</button>
             <button class="btn-secondary" onclick="clearText('remoteCandidatesBox')">지우기</button>
           </div>
-          <textarea id="remoteCandidatesBox" style="background: #111; color: #0f0; padding: 10px; border: 1px solid #555; height: 120px;"></textarea>
+          <textarea id="remoteCandidatesBox" style="height: 120px; background: #111; color: #0f0;"></textarea>
         </div>
       </div>
     </div>
   </div>
 
+
+
   <script>
+    const elStatusText = document.getElementById('statusText');
+
     const localVideo = document.getElementById('localVideo');
     const remoteVideo = document.getElementById('remoteVideo');
 
@@ -112,20 +116,14 @@
     const endCallBtn = document.getElementById('endCallBtn');
     const toggleCameraBtn = document.getElementById('toggleCameraBtn');
     const toggleAudioBtn = document.getElementById('toggleAudioBtn');
-
-    const createOfferBtns = document.querySelectorAll('.createOffer');
-    const createAnswerBtn = document.getElementById('createAnswer');
-    const setRemoteAnswerBtn = document.getElementById('setRemoteAnswer');
-    const addRemoteCandidatesBtn = document.getElementById('addRemoteCandidates');
+    const retryBtn = document.getElementById('retryBtn');
 
     const sdpBox = document.getElementById('sdpBox');
     const localCandidatesBox = document.getElementById('localCandidatesBox');
     const remoteCandidatesBox = document.getElementById('remoteCandidatesBox');
 
-    const configuration = { iceServers: [] };
-
-    const statusElementMap = {
-      local: document.getElementById('localStatus'),
+    const CONFIG = {
+      iceServers: { iceServers: [] },
     };
 
     let pc = null;
@@ -144,49 +142,34 @@
      */
     function updateUiForState() {
       const stateId = WS_STATUS[ws_state].id || '';
+      elStatusText.textContent = WS_STATUS[ws_state].label || '';
 
-      // 상태에 따른 텍스트 표시
-      const statusSpan = document.getElementById('localStatus');
-      statusSpan.textContent = WS_STATUS[ws_state].label || '';
-
-      // 초기화: 모든 버튼 숨김
       startCallBtn.style.display = 'none';
       endCallBtn.style.display = 'none';
+      retryBtn.style.display = 'none';
       toggleCameraBtn.style.display = 'none';
       toggleAudioBtn.style.display = 'none';
-      // 수동 모드 버튼들도 숨김/보임 처리 필요? 
-      // minimal-copy-paste는 수동 패널이 따로 있음. 메인 컨트롤 바 버튼만 제어.
 
-      // 상태별 버튼 제어
       switch (stateId) {
         case WS_STATUS.IDLE.id:
-          startCallBtn.style.display = 'inline-block';
-          startCallBtn.disabled = false;
           break;
-
         case WS_STATUS.WAITING.id:
-          startCallBtn.style.display = 'inline-block';
-          startCallBtn.disabled = false;
-          toggleAudioBtn.style.display = 'inline-block';
-          toggleCameraBtn.style.display = 'inline-block';
+          startCallBtn.style.display = 'block';
+          toggleAudioBtn.style.display = 'block';
+          toggleCameraBtn.style.display = 'block';
           break;
-
         case WS_STATUS.CONNECTING.id:
         case WS_STATUS.CONNECTED.id:
-          endCallBtn.style.display = 'inline-block';
-          endCallBtn.disabled = false;
-          toggleAudioBtn.style.display = 'inline-block';
-          toggleCameraBtn.style.display = 'inline-block';
+          endCallBtn.style.display = 'block';
+          toggleAudioBtn.style.display = 'block';
+          toggleCameraBtn.style.display = 'block';
           break;
-
-        case WS_STATUS.DISCONNECTED.id:
         case WS_STATUS.ERROR.id:
-           startCallBtn.style.display = 'inline-block';
-           startCallBtn.disabled = false;
-           break;
-
-         default:
-           break;
+          retryBtn.style.display = 'block';
+          break;
+        case WS_STATUS.DISCONNECTED.id:
+        default:
+          break;
       }
       
       // 로딩 오버레이 제어
@@ -199,77 +182,104 @@
     }
 
     /**
-     * RTCPeerConnection이 없으면 생성하고, 원격 스트림 처리와 ICE 후보 수집/전송을 설정하는 함수
+     * 카메라/마이크 권한 요청
      */
-    function ensurePC() {
-      if (!pc) {
-        pc = new RTCPeerConnection(configuration);
+    async function checkMediaPermissions() {
+      const cameraStatus = await navigator.permissions.query({ name: 'camera' });
+      const microphoneStatus = await navigator.permissions.query({ name: 'microphone' });
 
-        const remoteStream = new MediaStream();
-        remoteVideo.srcObject = remoteStream;
-
-        pc.ontrack = (event) => {
-          event.streams[0].getTracks().forEach((t) => remoteStream.addTrack(t));
-          
-          ws_state = WS_STATUS.CONNECTED.id;
-        };
-
-        // 로컬 ICE 후보: 수동 텍스트 + WS 전송 병행
-        pc.onicecandidate = (event) => {
-          if (event.candidate) {
-            localCandidatesBox.value += JSON.stringify(event.candidate) + '\n';
-          }
-        };
-
-        pc.oniceconnectionstatechange = () => {
-          console.log('ICE state:', pc.iceConnectionState);
-
-          switch (pc.iceConnectionState) {
-            case 'checking':
-              break;
-            case 'connected':
-            case 'completed':
-            case 'connected':
-            case 'completed':
-              ws_state = WS_STATUS.CONNECTED.id;
-              break;
-            case 'failed':
-              break;
-            case 'disconnected':
-            case 'closed':
-              endCall(); // 상대방 연결이 끊어지면 내 통화도 종료
-              break;
-          }
-        };
+      if (cameraStatus.state === 'denied') {
+        throw new Error('카메라 권한을 확인해 주세요.');
+      }
+      if (microphoneStatus.state === 'denied') {
+        throw new Error('마이크 권한을 확인해 주세요.');
       }
     }
 
     /**
-     * 통화 연결
+     * 미디어 장치 연결
      */
-    async function startCall() {
-      try {
-        // 권한 확인
-        const cameraStatus = await navigator.permissions.query({ name: 'camera' });
-        const microphoneStatus = await navigator.permissions.query({ name: 'microphone' });
-        if (cameraStatus.state === 'denied') { alert('카메라 권한이 거부되었습니다.'); return; }
-        if (microphoneStatus.state === 'denied') { alert('마이크 권한이 거부되었습니다.'); return; }
+    async function getMediaStream() {
+      if (localStream) return;
 
-        // 미디어 장치 연결
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        localVideo.srcObject = localStream;
+      const devices = await navigator.mediaDevices.enumerateDevices();
 
-        // WebRTC 연결
-        ensurePC();
-        localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+      const hasCamera = devices.some(d => d.kind === 'videoinput');
+      const hasMic = devices.some(d => d.kind === 'audioinput');
 
-        // UX 상태 업데이트
-        ws_state = WS_STATUS.WAITING.id;
-      } catch (e) {
-        console.error(e);
-        alert(e.message);
-        ws_state = WS_STATUS.ERROR.id;
+      if (!hasCamera) {
+        throw new Error('연결된 카메라가 없습니다.');
       }
+      if (!hasMic) {
+        throw new Error('연결된 마이크가 없습니다.');
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStream = stream;
+      localVideo.srcObject = stream;
+    }
+
+    /**
+     * RTCPeerConnection(PC) 생성
+     */
+    function ensurePC() {
+      if (pc) return;
+
+      pc = new RTCPeerConnection(CONFIG.iceServers);
+
+      if (localStream) {
+        localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+      }
+
+      const remoteStream = new MediaStream();
+      remoteVideo.srcObject = remoteStream;
+
+      pc.ontrack = (event) => {
+        console.log('ontrack', event);
+        const stream = event.streams?.[0];
+
+        if (stream) {
+          stream.getTracks().forEach((t) => remoteStream.addTrack(t));
+        } else {
+          remoteStream.addTrack(event.track);
+        }
+
+        event.track.onmute = () => {
+          console.warn("Remote track muted → 수신 중단");
+          ws_state = WS_STATUS.DISCONNECTED.id;
+        };
+
+        event.track.onended = () => {
+          console.log('Remote track ended');
+          ws_state = WS_STATUS.DISCONNECTED.id;
+        };
+      };
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          localCandidatesBox.value += JSON.stringify(event.candidate) + '\n';
+        }
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.log('ICE state:', pc.iceConnectionState);
+
+        switch (pc.iceConnectionState) {
+          case 'checking':
+            ws_state = WS_STATUS.CONNECTING.id;
+            break;
+          case 'connected':
+          case 'completed':
+            ws_state = WS_STATUS.CONNECTED.id;
+            break;
+          case 'failed':
+            break;
+          case 'disconnected':
+          case 'closed':
+            endCall(); // 상대방 연결이 끊어지면 내 통화도 종료
+            break;
+        }
+      };
     }
     
     /**
@@ -297,26 +307,37 @@
     }
 
     /**
-     * 카메라 On/Off
+     * 대기 상태 진입
      */
-    function toggleCamera() {
-      if (localStream) {
-        const videoTrack = localStream.getVideoTracks()[0];
-        if (videoTrack) {
-          videoTrack.enabled = !videoTrack.enabled;
-        }
+    async function enterWaitingState() {
+      try {
+        await checkMediaPermissions();
+        await getMediaStream();
+
+        ws_state = WS_STATUS.WAITING.id;
+      } catch (e) {
+        console.error(e);
+        alert(e.message);
+        ws_state = WS_STATUS.ERROR.id;
       }
     }
 
     /**
-     * 오디오 On/Off
+     * 미디어 장치 제어
+     * @param {string} type 'video' | 'audio'
      */
-    function toggleAudio() {
-      if (localStream) {
-        const audioTrack = localStream.getAudioTracks()[0];
-        if (audioTrack) {
-          audioTrack.enabled = !audioTrack.enabled;
-        }
+    function toggleMedia(type) {
+      if (!localStream) return;
+
+      const isVideo = type === 'video';
+      const tracks = isVideo ? localStream.getVideoTracks() : localStream.getAudioTracks();
+      const track = tracks[0];
+
+      if (track) {
+        track.enabled = !track.enabled;
+        const btn = isVideo ? toggleCameraBtn : toggleAudioBtn;
+        const label = isVideo ? '카메라' : '마이크';
+        btn.textContent = `${label} ${track.enabled ? 'On' : 'Off'}`;
       }
     }
 
@@ -386,10 +407,38 @@
       }
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
-      // UX 상태 업데이트
-      ws_state = WS_STATUS.IDLE.id;
-    });
+    /**
+     * 공통 에러 핸들러
+     * @param {Error} e 에러 객체
+     * @param {Function} retryAction 재시도 시 실행할 함수 (옵션)
+     */
+    function handleError(e, retryAction) {
+      ws_state = WS_STATUS.ERROR.id;
+
+      const msg = e.message || e;
+      alert(msg);
+
+      if (retryAction && typeof retryAction === 'function') {
+        retryBtn.onclick = async () => {
+          try {
+            await retryAction();
+          } catch (err) {
+            handleError(err, retryAction);
+          }
+        };
+      } else {
+        retryBtn.onclick = enterWaitingState; 
+      }
+    }
+
+    window.onload = () => {
+      updateUiForState();
+      enterWaitingState();
+    };
+    window.onbeforeunload = () => {
+      endCall();
+    };
+    window.onerror = (msg, url, line) => log('ERROR', `Global: ${msg} (${line})`);
   </script>
 </body>
 </html>

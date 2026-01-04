@@ -32,6 +32,7 @@
         WSS 인증서
       </button>
     </div>
+
     <div class="status-pill">
       <div><span id="statusText">IDLE</span></div>
       <div style="margin-left: 10px; padding-left: 10px; border-left: 1px solid #555;">WS: <span id="wsStatusText" style="color: red;">disconnected</span></div>
@@ -140,6 +141,46 @@
       }
     }
 
+    
+    
+    /**
+     * 카메라/마이크 권한 요청
+     */
+    async function checkMediaPermissions() {
+      const cameraStatus = await navigator.permissions.query({ name: 'camera' });
+      const microphoneStatus = await navigator.permissions.query({ name: 'microphone' });
+
+      if (cameraStatus.state === 'denied') {
+        throw new Error('카메라 권한을 확인해 주세요.');
+      }
+      if (microphoneStatus.state === 'denied') {
+        throw new Error('마이크 권한을 확인해 주세요.');
+      }
+    }
+
+    /**
+     * 미디어 장치 연결
+     */
+    async function getMediaStream() {
+      if (localStream) return;
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+
+      const hasCamera = devices.some(d => d.kind === 'videoinput');
+      const hasMic = devices.some(d => d.kind === 'audioinput');
+
+      if (!hasCamera) {
+        throw new Error('연결된 카메라가 없습니다.');
+      }
+      if (!hasMic) {
+        throw new Error('연결된 마이크가 없습니다.');
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStream = stream;
+      localVideo.srcObject = stream;
+    }
+
     /**
      * RTCPeerConnection(PC) 생성
      */
@@ -147,12 +188,10 @@
       if (pc) return;
       
       pc = new RTCPeerConnection(CONFIG.iceServers);
-      
-      localStream.getTracks().forEach(track => {
-        if (!pc.getSenders().find(s => s.track === track)) {
-          pc.addTrack(track, localStream);
-        }
-      });
+
+      if (localStream) {
+        localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+      }
 
       const remoteStream = new MediaStream();
       remoteVideo.srcObject = remoteStream;
@@ -205,9 +244,11 @@
             ws_state = WS_STATUS.CONNECTING.id;
             break;
           case 'connected': // P2P 연결 완료
+          case 'completed':
             ws_state = WS_STATUS.CONNECTED.id;
             break;
           case 'failed': // 연결 실패
+            break;
           case 'disconnected': // 연결 종료
           case 'closed': // 연결 종료
             endCall();
@@ -282,58 +323,6 @@
         }
       });
     }
-    
-    /**
-     * 카메라/마이크 권한 요청
-     */
-    async function checkMediaPermissions() {
-      const cameraStatus = await navigator.permissions.query({ name: 'camera' });
-      const microphoneStatus = await navigator.permissions.query({ name: 'microphone' });
-
-      if (cameraStatus.state === 'denied') {
-        throw new Error('카메라 권한을 확인해 주세요.');
-      }
-      if (microphoneStatus.state === 'denied') {
-        throw new Error('마이크 권한을 확인해 주세요.');
-      }
-    }
-
-    /**
-     * 미디어 장치 연결
-     */
-    async function getMediaStream() {
-      if (localStream) return;
-
-      const devices = await navigator.mediaDevices.enumerateDevices();
-
-      const hasCamera = devices.some(d => d.kind === 'videoinput');
-      const hasMic = devices.some(d => d.kind === 'audioinput');
-
-      if (!hasCamera) {
-        throw new Error('연결된 카메라가 없습니다.');
-      }
-      if (!hasMic) {
-        throw new Error('연결된 마이크가 없습니다.');
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      localStream = stream;
-      localVideo.srcObject = stream;
-    }
-
-    /**
-     * 대기 상태 진입
-     */
-    async function enterWaitingState() {
-      try {
-        await checkMediaPermissions();
-        await getMediaStream();
-
-        ws_state = WS_STATUS.WAITING.id;
-      } catch (e) {
-        handleError(e, enterWaitingState);
-      }
-    }
 
     /**
      * 통화 연결 요청
@@ -395,6 +384,20 @@
 
       } catch (e) {
         handleError(e);
+      }
+    }
+
+    /**
+     * 대기 상태 진입
+     */
+    async function enterWaitingState() {
+      try {
+        await checkMediaPermissions();
+        await getMediaStream();
+
+        ws_state = WS_STATUS.WAITING.id;
+      } catch (e) {
+        handleError(e, enterWaitingState);
       }
     }
 

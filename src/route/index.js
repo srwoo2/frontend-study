@@ -4,7 +4,7 @@ export const routeConfig = [
     items: [
       { text: 'Minimal-copy-paste', href: '/src/webrtc/custom/minimal/minimal-copy-paste.html' },
       { text: 'Minimal-call', href: '/src/webrtc/custom/minimal/minimal-call.html' },
-      { text: 'Minimal-room', href: '/src/webrtc/custom/minimal/minimal-room.html' },
+      // { text: 'Minimal-room', href: '/src/webrtc/custom/minimal/minimal-room.html' },
     ]
   },
   {
