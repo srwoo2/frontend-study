@@ -265,6 +265,7 @@
             ws_state = WS_STATUS.CONNECTED.id;
             break;
           case 'failed': // 연결 실패
+            handleError(new Error("P2P 연결에 실패했습니다. (ICE Failed)"), startCall);
             break;
           case 'disconnected': // 연결 종료
           case 'closed': // 연결 종료
@@ -361,8 +362,6 @@
           ws.send(JSON.stringify({ type: 'offer', offer: pc.localDescription }));
         }
       } catch (e) {
-        ws_state = WS_STATUS.IDLE.id;
-
         handleError(e, startCall);
       }
     }
@@ -396,6 +395,7 @@
           }
 
           localVideo.srcObject = null;
+          ws_state = WS_STATUS.DISCONNECTED.id;
         }
 
       } catch (e) {
