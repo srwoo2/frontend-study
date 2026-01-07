@@ -147,6 +147,14 @@
         overlay.style.display = 'none';
       }
     }
+
+    /**
+     * 종료 알림 표시
+     */
+    function showDisconnectPopup(reason) {
+      alert(reason);
+      enterWaitingState();
+    }
     
     /**
      * 미디어 장치 제어
@@ -283,6 +291,9 @@
             break;
           case 'disconnected': // 연결 종료
           case 'closed': // 연결 종료
+            if (ws_state === WS_STATUS.CONNECTED.id) {
+              showDisconnectPopup(ERRORS.NETWORK_UNSTABLE);
+            }
             endCall();
             break;
         }
@@ -307,10 +318,17 @@
             elWsStatusText.style.color = 'white';
             resolve();
           };
-          ws.onclose = () => {
-            console.log('WebSocket disconnected');
+          ws.onclose = (event) => {
+            console.log('WebSocket disconnected', event);
             elWsStatusText.textContent = 'disconnected';
             elWsStatusText.style.color = 'red';
+
+            // 의도치 않은 종료 시 (코드 1000은 정상 종료)
+            if (ws_state === WS_STATUS.CONNECTED.id || ws_state === WS_STATUS.CONNECTING.id) {
+              if (event.code !== 1000) {
+                showDisconnectPopup(ERRORS.DISCONNECTED_BY_SERVER);
+              }
+            }
             ws = null; 
           };
           ws.onerror = (e) => {
@@ -339,6 +357,12 @@
                 }
                 case 'candidate': {
                   await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                  break;
+                }
+                case 'leave': {
+                  console.log('Peer left');
+                  showDisconnectPopup(ERRORS.PEER_LEFT);
+                  endCall();
                   break;
                 }
               }
@@ -402,6 +426,7 @@
 
         // 소켓 해제
         if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'leave' }));
           ws.close();
         }
 
