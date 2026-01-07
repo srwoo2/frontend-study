@@ -11,6 +11,9 @@
     "prod:webrtc": "npm run build && powershell -Command \"Start-Process node -ArgumentList 'server/http-server.js'; Start-Process node -ArgumentList 'server/ws-server.js'\"",
     "env": "cross-env echo \"token=$PROJECT_TOKEN\""
   },
+  "engines": {
+    "node": "^20.10.0"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
