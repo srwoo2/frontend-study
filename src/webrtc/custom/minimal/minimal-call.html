@@ -49,7 +49,7 @@
       </div>
       <div class="video-box">
         <div class="label">나 (Local)</div>
-        <video id="localVideo" autoplay playsinline muted></video>
+        <video id="localVideo" autoplay playsinline></video>
       </div>
     </div>
   
@@ -200,9 +200,16 @@
         throw new Error(ERRORS.NO_MIC);
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: true, 
+        audio: true
+      });
       localStream = stream;
-      localVideo.srcObject = stream;
+
+      // 삼성인터넷 음소거 자동재생 현상 방지 로직
+      // 로컬 화면용으로 비디오 트랙만 따로 뽑은 새로운 스트림 적용
+      const videoOnlyStream = new MediaStream(stream.getVideoTracks());
+      localVideo.srcObject = videoOnlyStream;
     }
 
     /**
