@@ -73,6 +73,7 @@ const ERRORS = {
   NO_CAMERA: '연결된 카메라가 없습니다.',
   NO_MIC: '연결된 마이크가 없습니다.',
   WS_ERROR: 'WebSocket Error\n서버가 실행 중인지, 혹은 인증서 허용(wss)이 되었는지 확인해 주세요.',
+  CONNECTION_TIMEOUT: '10초이상 연결이 안되어 종료합니다',
 };
 
 /** LOGGING */

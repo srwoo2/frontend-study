@@ -88,12 +88,19 @@
     let pc = null;
     let localStream = null;
     let ws = null;
+    let connectionTimeoutId = null;
     let _call_state = WS_STATUS.IDLE.id;
     Object.defineProperty(window, 'ws_state', {
       get: function() { return _call_state; },
       set: function(val) {
         _call_state = val;
         updateUiForState();
+
+        // Timeout 초기화
+        if (connectionTimeoutId && val !== WS_STATUS.CONNECTING.id) {
+          clearTimeout(connectionTimeoutId);
+          connectionTimeoutId = null;
+        }
       }
     });
 
@@ -348,6 +355,13 @@
       try {
         // 로딩 표시
         ws_state = WS_STATUS.CONNECTING.id;
+
+        // Timeout Start
+        if (connectionTimeoutId) clearTimeout(connectionTimeoutId);
+        connectionTimeoutId = setTimeout(() => {
+          endCall();
+          handleError(new Error(ERRORS.CONNECTION_TIMEOUT));
+        }, CONFIG.connectTimeoutMs);
 
         // pc 연결
         ensurePC();
