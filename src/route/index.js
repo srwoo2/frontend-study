@@ -2,9 +2,9 @@ export const routeConfig = [
   {
     title: 'My samples',
     items: [
-      { text: 'Minimal-copy-paste', href: '/src/webrtc/custom/minimal/minimal-copy-paste.html' },
+      { text: 'MoblieTeam Test', href: '/src/webrtc/custom/minimal/moblieTeam.html' },
       { text: 'Minimal-call', href: '/src/webrtc/custom/minimal/minimal-call.html' },
-      // { text: 'Minimal-room', href: '/src/webrtc/custom/minimal/minimal-room.html' },
+      { text: 'Minimal-copy-paste', href: '/src/webrtc/custom/minimal/minimal-copy-paste.html' },
     ]
   },
   {

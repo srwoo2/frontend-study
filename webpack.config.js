@@ -39,6 +39,13 @@ module.exports = {
       { directory: path.join(__dirname, "public"), publicPath: '/' },
       { directory: path.join(__dirname, "src"), publicPath: '/src' },
     ],
+    proxy: [
+    {
+      context: ['/api'],
+      target: 'https://localhost:3000',
+      secure: false,
+    },
+  ],
     historyApiFallback: true,
   },
   module: {

@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+  <script type="importmap">
+    {
+      "imports": {
+        "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+        "firebase/database": "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js"
+      }
+    }
+  </script>
   <script src="/src/webrtc/js/common/set-title.js"></script>
   <script src="/src/webrtc/js/common/utils.js"></script>
   <style>
@@ -24,18 +32,8 @@
 </head>
 <body>
   <div id='container'>
-    <div style="position: absolute; top: 10px; right: 10px; z-index: 10;">
-      <button 
-        id="approveCertBtn" 
-        class="btn-small" 
-        onclick="window.open(CONFIG.wssCertUrl, '', 'width=800,height=600')">
-        인증서 허용(wss)
-      </button>
-    </div>
-
     <div class="status-pill">
       <div><span id="statusText">IDLE</span></div>
-      <div style="margin-left: 10px; padding-left: 10px; border-left: 1px solid #555;">WS: <span id="wsStatusText" style="color: red;">disconnected</span></div>
     </div>
   
     <div class="split-container">
@@ -55,6 +53,7 @@
   
     <div class="control-bar">
       <button id="startCallBtn" class="btn-primary" onclick="startCall()" style="display:none">통화 시작</button>
+      <button id="receiveCallBtn" class="btn-primary" onclick="receiveCall()" style="display:none">전화 받기</button>
       <button id="endCallBtn" class="btn-danger" onclick="endCall()" style="display:none">통화 종료</button>
       <button id="toggleCameraBtn" class="btn-secondary" onclick="toggleMedia('video')" style="display:none">카메라 On</button>
       <button id="toggleAudioBtn" class="btn-secondary" onclick="toggleMedia('audio')" style="display:none">마이크 On</button>
@@ -62,9 +61,25 @@
     </div>
   </div>
 
+  <script type="module">
+    import { initializeApp } from 'firebase/app';
+    import { getDatabase, ref, set, onValue, push, onChildAdded, remove } from 'firebase/database';
 
+    let app, db, roomRef;
 
-  <script>
+    // 서버로부터 설정값을 받아온 후 초기화
+    async function initFirebase() {
+      const response = await fetch('/api/firebase-config');
+      const firebaseConfig = await response.json();
+
+      // Firebase 초기화
+      app = initializeApp(firebaseConfig);
+      db = getDatabase(app);
+      roomRef = ref(db, 'calls/room1'); // 시그널링 채널 생성
+      
+      console.log("(1) Firebase 연결 성공");
+    }
+
     const elStatusText = document.getElementById('statusText');
     const elWsStatusText = document.getElementById('wsStatusText');
 
@@ -72,22 +87,19 @@
     const remoteVideo = document.getElementById('remoteVideo');
 
     const startCallBtn = document.getElementById('startCallBtn');
+    const receiveCallBtn = document.getElementById('receiveCallBtn');
     const endCallBtn = document.getElementById('endCallBtn');
     const toggleCameraBtn = document.getElementById('toggleCameraBtn');
     const toggleAudioBtn = document.getElementById('toggleAudioBtn');
     const retryBtn = document.getElementById('retryBtn');
 
     const CONFIG = {
-      wssUrl: `wss://${window.location.hostname}:3001`,
-      wssCertUrl: `https://${window.location.hostname}:3001`,
-      logUrl: `https://${window.location.hostname}:3000/log`,
-      iceServers: { iceServers: [] },
+      iceServers: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
       connectTimeoutMs: 10000
     };
 
     let pc = null;
     let localStream = null;
-    let ws = null;
     let connectionTimeoutId = null;
     let _call_state = WS_STATUS.IDLE.id;
     Object.defineProperty(window, 'ws_state', {
@@ -104,6 +116,13 @@
       }
     });
 
+    window.startCall = startCall;
+    window.receiveCall = receiveCall;
+    window.endCall = endCall;
+    window.toggleMedia = toggleMedia;
+    window.enterWaitingState = enterWaitingState;
+    window.CONFIG = CONFIG;
+
     /**
      * 연결 상태 UI 표시
      */
@@ -112,6 +131,7 @@
       elStatusText.textContent = WS_STATUS[ws_state].label || '';
 
       startCallBtn.style.display = 'none';
+      receiveCallBtn.style.display = 'none';
       retryBtn.style.display = 'none';
       endCallBtn.style.display = 'none';
       toggleAudioBtn.style.display = 'none';
@@ -122,6 +142,7 @@
           break;
         case WS_STATUS.WAITING.id:
           startCallBtn.style.display = 'block';
+          receiveCallBtn.style.display = 'block';
           toggleAudioBtn.style.display = 'block';
           toggleCameraBtn.style.display = 'block';
           break;
@@ -208,19 +229,16 @@
         throw new Error(ERRORS.NO_MIC);
       }
 
-      navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({ 
         video: true, 
         audio: true
-      }).then((mediaStream) => {
-        localStream = mediaStream;
-
-        const videoOnlyStream = new MediaStream(mediaStream.getVideoTracks());
-        localVideo.srcObject = videoOnlyStream;
-      }).catch((err) => {
-        console.error("MediaStream 오류:", err);
-        throw err;
       });
+      localStream = stream;
 
+      // 삼성인터넷 음소거 자동재생 현상 방지 로직
+      // 로컬 화면용으로 비디오 트랙만 따로 뽑은 새로운 스트림 적용
+      const videoOnlyStream = new MediaStream(stream.getVideoTracks());
+      localVideo.srcObject = videoOnlyStream;
     }
 
     /**
@@ -266,12 +284,12 @@
 
       /**
        * ICE 후보(candidates)가 생성될 때마다 호출되는 핸들러
-       * 연결 상대에게 candidate 정보를 WebSocket으로 전송하여
-       * NAT Traversal(방화벽 통과)을 가능하게 함
+       * Firebase push하여 저장
        */
       pc.onicecandidate = (event) => {
-        if (event.candidate && ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
+        if (event.candidate) {
+          const role = (ws_state === WS_STATUS.CONNECTING.id) ? 'callerCandidates' : 'calleeCandidates';
+          push(ref(db, `calls/room1/${role}`), event.candidate.toJSON());
         }
       };
 
@@ -304,85 +322,6 @@
     }
 
     /**
-     * 시그널링 서버 연결
-     */
-    async function connectWss() {
-      try {
-        await new Promise((resolve, reject) => {
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            return resolve();
-          }
-
-          ws = new WebSocket(CONFIG.wssUrl);
-          
-          ws.onopen = () => {
-            console.log('WebSocket connected');
-            elWsStatusText.textContent = 'connected';
-            elWsStatusText.style.color = 'white';
-            resolve();
-          };
-          ws.onclose = (event) => {
-            console.log('WebSocket disconnected', event);
-            elWsStatusText.textContent = 'disconnected';
-            elWsStatusText.style.color = 'red';
-
-            // 의도치 않은 종료 시 (코드 1000은 정상 종료)
-            if (ws_state === WS_STATUS.CONNECTED.id || ws_state === WS_STATUS.CONNECTING.id) {
-              if (event.code !== 1000) {
-                showDisconnectPopup(ERRORS.DISCONNECTED_BY_SERVER);
-              }
-            }
-            ws = null; 
-          };
-          ws.onerror = (e) => {
-            console.log('WebSocket error');
-            reject(e);
-          };
-          ws.onmessage = async (msg) => {
-            try {
-              const data = JSON.parse(msg.data);
-
-              switch(data.type) {
-                case 'offer': {
-                  await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
-
-                  const answer = await pc.createAnswer();
-                  await pc.setLocalDescription(answer);
-
-                  if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ type: 'answer', answer: pc.localDescription }));
-                  }
-                  break;
-                }
-                case 'answer': {
-                  await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-                  break;
-                }
-                case 'candidate': {
-                  await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-                  break;
-                }
-                case 'leave': {
-                  console.log('Peer left');
-                  showDisconnectPopup(ERRORS.PEER_LEFT);
-                  endCall();
-                  break;
-                }
-              }
-            } catch (e) {
-              console.error('WS message handling error:', e);
-            }
-          };
-        });
-      } catch (e) {
-        elWsStatusText.textContent = 'disconnected';
-        elWsStatusText.style.color = 'red';
-        console.error('WS 연결 실패: ' + e);
-        throw new Error(ERRORS.WS_ERROR);
-      }
-    }
-
-    /**
      * 통화 연결 요청
      */
     async function startCall() {
@@ -400,24 +339,61 @@
         // pc 연결
         ensurePC();
 
-        // 소켓 연결
-        await connectWss();
-
         // offer 생성
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'offer', offer: pc.localDescription }));
-        }
+        await set(ref(db, 'calls/room1/offer'), { type: offer.type, sdp: offer.sdp });
+
+        // 상대방 Answer 감시
+        onValue(ref(db, 'calls/room1/answer'), async (snapshot) => {
+          const data = snapshot.val();
+          if (data && !pc.remoteDescription) {
+            await pc.setRemoteDescription(new RTCSessionDescription(data));
+          }
+        });
+
+        // 상대방 ICE Candidate 감시
+        onChildAdded(ref(db, 'calls/room1/calleeCandidates'), (snapshot) => {
+          const data = snapshot.val();
+          if (data && pc) {
+            pc.addIceCandidate(new RTCIceCandidate(data)).catch(e => console.error("Error adding candidate:", e));
+          }
+        });
       } catch (e) {
         handleError(e, startCall);
       }
+    }
+
+    /**
+     * 통화 수신
+     */
+    async function receiveCall() {
+      ensurePC();
+
+      // Firebase에 올라온 Offer 감시
+      onValue(ref(db, 'calls/room1/offer'), async (snapshot) => {
+        const data = snapshot.val();
+        if (data && !pc.remoteDescription) {
+          await pc.setRemoteDescription(new RTCSessionDescription(data));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          await set(ref(db, 'calls/room1/answer'), { type: answer.type, sdp: answer.sdp });
+        }
+      });
+
+      // 상대방 ICE Candidate 감시
+      onChildAdded(ref(db, 'calls/room1/callerCandidates'), (snapshot) => {
+        const data = snapshot.val();
+        if (data && pc) {
+          pc.addIceCandidate(new RTCIceCandidate(data)).catch(e => console.error("Error adding candidate:", e));
+        }
+      });
     }
     
     /**
      * 통화 종료 요청
      */
-    function endCall() {
+    async function endCall() {
       try {
         const currentState = ws_state;
 
@@ -427,11 +403,8 @@
           pc = null;
         }
 
-        // 소켓 해제
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'leave' }));
-          ws.close();
-        }
+        // Firebase 데이터 삭제
+        await remove(roomRef);
 
         // 상태별 분기 처리
         if (currentState === WS_STATUS.CONNECTING.id) {
@@ -467,13 +440,13 @@
     }
     
     window.onload = () => {
+      initFirebase();
       updateUiForState();
       enterWaitingState();
     };
     window.onbeforeunload = () => {
       endCall();
     };
-    window.onerror = (msg, url, line) => log('ERROR', `Global: ${msg} (${line})`);
   </script>
 </body>
 </html>

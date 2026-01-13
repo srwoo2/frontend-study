@@ -1,4 +1,4 @@
-export function createTargetToggleBtn(onTargetChange, initialTarget = '_blank') {
+export function createTargetToggleBtn(onTargetChange, initialTarget = '_self') {
   const btn = document.createElement('button');
   btn.id = 'targetToggleBtn';
   btn.textContent = `Target: ${initialTarget}`;
