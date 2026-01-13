@@ -25,7 +25,7 @@ export function createLinkItem(parent, text, href, router, basePath = '/webrtc')
   
   const targetUrl = `${basePath}?path=${encodeURIComponent(href)}`;
   a.href = targetUrl;
-  a.target = '_blank';
+  a.target = '_self';
   
   a.addEventListener('click', (e) => {
     if (a.target !== '_blank') {
