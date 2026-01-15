@@ -34,7 +34,7 @@
     </div>
 
     <div class="status-pill">
-      <div><span id="statusText">IDLE</span></div>
+      <div><span id="statusText">WAITING</span></div>
       <div style="margin-left: 10px; padding-left: 10px; border-left: 1px solid #555;">WS: <span id="wsStatusText" style="color: red;">disconnected</span></div>
     </div>
   
@@ -89,7 +89,7 @@
     let localStream = null;
     let ws = null;
     let connectionTimeoutId = null;
-    let _call_state = WS_STATUS.IDLE.id;
+    let _call_state = CALL_STATUS.WAITING.id;
     Object.defineProperty(window, 'ws_state', {
       get: function() { return _call_state; },
       set: function(val) {
@@ -97,7 +97,7 @@
         updateUiForState();
 
         // Timeout 초기화
-        if (connectionTimeoutId && val !== WS_STATUS.CONNECTING.id) {
+        if (connectionTimeoutId && val !== CALL_STATUS.CONNECTING.id) {
           clearTimeout(connectionTimeoutId);
           connectionTimeoutId = null;
         }
@@ -108,8 +108,8 @@
      * 연결 상태 UI 표시
      */
     function updateUiForState() {
-      const stateId = WS_STATUS[ws_state].id || '';
-      elStatusText.textContent = WS_STATUS[ws_state].label || '';
+      const stateId = CALL_STATUS[ws_state].id || '';
+      elStatusText.textContent = CALL_STATUS[ws_state].label || '';
 
       startCallBtn.style.display = 'none';
       retryBtn.style.display = 'none';
@@ -118,30 +118,30 @@
       toggleCameraBtn.style.display = 'none';
 
       switch (stateId) {
-        case WS_STATUS.IDLE.id:
+        case CALL_STATUS.WAITING.id:
           break;
-        case WS_STATUS.WAITING.id:
+        case CALL_STATUS.IDLE.id:
           startCallBtn.style.display = 'block';
           toggleAudioBtn.style.display = 'block';
           toggleCameraBtn.style.display = 'block';
           break;
-        case WS_STATUS.CONNECTING.id:
-        case WS_STATUS.CONNECTED.id:
+        case CALL_STATUS.CONNECTING.id:
+        case CALL_STATUS.CONNECTED.id:
           endCallBtn.style.display = 'block';
           toggleAudioBtn.style.display = 'block';
           toggleCameraBtn.style.display = 'block';
           break;
-        case WS_STATUS.ERROR.id:
+        case CALL_STATUS.ERROR.id:
           retryBtn.style.display = 'block';
           break;
-        case WS_STATUS.DISCONNECTED.id:
+        case CALL_STATUS.DISCONNECTED.id:
         default:
           break;
       }
 
       // 로딩 오버레이 제어
       const overlay = document.getElementById('loadingOverlay');
-      if (stateId === WS_STATUS.CONNECTING.id) {
+      if (stateId === CALL_STATUS.CONNECTING.id) {
         overlay.style.display = 'flex';
       } else {
         overlay.style.display = 'none';
@@ -255,12 +255,12 @@
 
         event.track.onmute = () => {
           console.warn("Remote track muted → 수신 중단");
-          ws_state = WS_STATUS.DISCONNECTED.id;
+          ws_state = CALL_STATUS.DISCONNECTED.id;
         };
 
         event.track.onended = () => {
           console.log('Remote track ended');
-          ws_state = WS_STATUS.DISCONNECTED.id;
+          ws_state = CALL_STATUS.DISCONNECTED.id;
         };
       };
 
@@ -283,18 +283,18 @@
 
         switch (pc.iceConnectionState) {
           case 'checking': // P2P 연결 시도 중
-            ws_state = WS_STATUS.CONNECTING.id;
+            ws_state = CALL_STATUS.CONNECTING.id;
             break;
           case 'connected': // P2P 연결 완료
           case 'completed':
-            ws_state = WS_STATUS.CONNECTED.id;
+            ws_state = CALL_STATUS.CONNECTED.id;
             break;
           case 'failed': // 연결 실패
             handleError(new Error("P2P 연결에 실패했습니다. (ICE Failed)"), startCall);
             break;
           case 'disconnected': // 연결 종료
           case 'closed': // 연결 종료
-            if (ws_state === WS_STATUS.CONNECTED.id) {
+            if (ws_state === CALL_STATUS.CONNECTED.id) {
               showDisconnectPopup(ERRORS.NETWORK_UNSTABLE);
             }
             endCall();
@@ -327,7 +327,7 @@
             elWsStatusText.style.color = 'red';
 
             // 의도치 않은 종료 시 (코드 1000은 정상 종료)
-            if (ws_state === WS_STATUS.CONNECTED.id || ws_state === WS_STATUS.CONNECTING.id) {
+            if (ws_state === CALL_STATUS.CONNECTED.id || ws_state === CALL_STATUS.CONNECTING.id) {
               if (event.code !== 1000) {
                 showDisconnectPopup(ERRORS.DISCONNECTED_BY_SERVER);
               }
@@ -388,7 +388,7 @@
     async function startCall() {
       try {
         // 로딩 표시
-        ws_state = WS_STATUS.CONNECTING.id;
+        ws_state = CALL_STATUS.CONNECTING.id;
 
         // Timeout Start
         if (connectionTimeoutId) clearTimeout(connectionTimeoutId);
@@ -434,8 +434,8 @@
         }
 
         // 상태별 분기 처리
-        if (currentState === WS_STATUS.CONNECTING.id) {
-          ws_state = WS_STATUS.WAITING.id;
+        if (currentState === CALL_STATUS.CONNECTING.id) {
+          ws_state = CALL_STATUS.IDLE.id;
         } else {
           // 로컬 미디어 해제
           if (localStream) {
@@ -444,7 +444,7 @@
           }
 
           localVideo.srcObject = null;
-          ws_state = WS_STATUS.DISCONNECTED.id;
+          ws_state = CALL_STATUS.DISCONNECTED.id;
         }
 
       } catch (e) {
@@ -460,7 +460,7 @@
         await checkMediaPermissions();
         await getMediaStream();
 
-        ws_state = WS_STATUS.WAITING.id;
+        ws_state = CALL_STATUS.IDLE.id;
       } catch (e) {
         handleError(e, enterWaitingState);
       }

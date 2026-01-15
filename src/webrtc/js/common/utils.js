@@ -55,9 +55,9 @@ window.clearText = function(id) {
 /**
  * WebRTC 통화 상태를 나타내는 전역 객체
  */
-const WS_STATUS = {
-  IDLE:        { id: 'IDLE',        label: '접속' },
-  WAITING:     { id: 'WAITING',     label: '대기' },
+const CALL_STATUS = {
+  WAITING:     { id: 'WAITING',     label: '접속' },
+  IDLE:        { id: 'IDLE',        label: '대기' },
   CONNECTING:  { id: 'CONNECTING',  label: '연결중' },
   CONNECTED:   { id: 'CONNECTED',   label: '통화중' },
   DISCONNECTED:{ id: 'DISCONNECTED',label: '종료' },

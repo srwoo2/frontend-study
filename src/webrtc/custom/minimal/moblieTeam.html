@@ -33,7 +33,7 @@
 <body>
   <div id='container'>
     <div class="status-pill">
-      <div><span id="statusText">IDLE</span></div>
+      <div><span id="statusText">WAITING</span></div>
     </div>
   
     <div class="split-container">
@@ -106,7 +106,7 @@
     let pc = null;
     let localStream = null;
     let connectionTimeoutId = null;
-    let _call_state = WS_STATUS.IDLE.id;
+    let _call_state = CALL_STATUS.WAITING.id;
     Object.defineProperty(window, 'ws_state', {
       get: function() { return _call_state; },
       set: function(val) {
@@ -114,7 +114,7 @@
         updateUiForState();
 
         // Timeout 초기화
-        if (connectionTimeoutId && val !== WS_STATUS.CONNECTING.id) {
+        if (connectionTimeoutId && val !== CALL_STATUS.CONNECTING.id) {
           clearTimeout(connectionTimeoutId);
           connectionTimeoutId = null;
         }
@@ -132,8 +132,8 @@
      * 연결 상태 UI 표시
      */
     function updateUiForState() {
-      const stateId = WS_STATUS[ws_state].id || '';
-      elStatusText.textContent = WS_STATUS[ws_state].label || '';
+      const stateId = CALL_STATUS[ws_state].id || '';
+      elStatusText.textContent = CALL_STATUS[ws_state].label || '';
 
       startCallBtn.style.display = 'none';
       receiveCallBtn.style.display = 'none';
@@ -143,31 +143,31 @@
       toggleCameraBtn.style.display = 'none';
 
       switch (stateId) {
-        case WS_STATUS.IDLE.id:
+        case CALL_STATUS.WAITING.id:
           break;
-        case WS_STATUS.WAITING.id:
+        case CALL_STATUS.IDLE.id:
           startCallBtn.style.display = 'block';
           receiveCallBtn.style.display = 'block';
           toggleAudioBtn.style.display = 'block';
           toggleCameraBtn.style.display = 'block';
           break;
-        case WS_STATUS.CONNECTING.id:
-        case WS_STATUS.CONNECTED.id:
+        case CALL_STATUS.CONNECTING.id:
+        case CALL_STATUS.CONNECTED.id:
           endCallBtn.style.display = 'block';
           toggleAudioBtn.style.display = 'block';
           toggleCameraBtn.style.display = 'block';
           break;
-        case WS_STATUS.ERROR.id:
+        case CALL_STATUS.ERROR.id:
           retryBtn.style.display = 'block';
           break;
-        case WS_STATUS.DISCONNECTED.id:
+        case CALL_STATUS.DISCONNECTED.id:
         default:
           break;
       }
 
       // 로딩 오버레이 제어
       const overlay = document.getElementById('loadingOverlay');
-      if (stateId === WS_STATUS.CONNECTING.id) {
+      if (stateId === CALL_STATUS.CONNECTING.id) {
         overlay.style.display = 'flex';
       } else {
         overlay.style.display = 'none';
@@ -278,12 +278,12 @@
 
         event.track.onmute = () => {
           console.warn("Remote track muted → 수신 중단");
-          ws_state = WS_STATUS.DISCONNECTED.id;
+          ws_state = CALL_STATUS.DISCONNECTED.id;
         };
 
         event.track.onended = () => {
           console.log('Remote track ended');
-          ws_state = WS_STATUS.DISCONNECTED.id;
+          ws_state = CALL_STATUS.DISCONNECTED.id;
         };
       };
 
@@ -293,7 +293,7 @@
        */
       pc.onicecandidate = (event) => {
         if (event.candidate) {
-          const role = (ws_state === WS_STATUS.CONNECTING.id) ? 'callerCandidates' : 'calleeCandidates';
+          const role = (ws_state === CALL_STATUS.CONNECTING.id) ? 'callerCandidates' : 'calleeCandidates';
           push(ref(db, `calls/room1/${role}`), event.candidate.toJSON());
         }
       };
@@ -306,18 +306,18 @@
 
         switch (pc.iceConnectionState) {
           case 'checking': // P2P 연결 시도 중
-            ws_state = WS_STATUS.CONNECTING.id;
+            ws_state = CALL_STATUS.CONNECTING.id;
             break;
           case 'connected': // P2P 연결 완료
           case 'completed':
-            ws_state = WS_STATUS.CONNECTED.id;
+            ws_state = CALL_STATUS.CONNECTED.id;
             break;
           case 'failed': // 연결 실패
             handleError(new Error("P2P 연결에 실패했습니다. (ICE Failed)"), startCall);
             break;
           case 'disconnected': // 연결 종료
           case 'closed': // 연결 종료
-            if (ws_state === WS_STATUS.CONNECTED.id) {
+            if (ws_state === CALL_STATUS.CONNECTED.id) {
               showDisconnectPopup(ERRORS.NETWORK_UNSTABLE);
             }
             endCall();
@@ -332,7 +332,7 @@
     async function startCall() {
       try {
         // 로딩 표시
-        ws_state = WS_STATUS.CONNECTING.id;
+        ws_state = CALL_STATUS.CONNECTING.id;
 
         // Timeout Start
         if (connectionTimeoutId) clearTimeout(connectionTimeoutId);
@@ -412,8 +412,8 @@
         await remove(roomRef);
 
         // 상태별 분기 처리
-        if (currentState === WS_STATUS.CONNECTING.id) {
-          ws_state = WS_STATUS.WAITING.id;
+        if (currentState === CALL_STATUS.CONNECTING.id) {
+          ws_state = CALL_STATUS.IDLE.id;
         } else {
           // 로컬 미디어 해제
           if (localStream) {
@@ -422,7 +422,7 @@
           }
 
           localVideo.srcObject = null;
-          ws_state = WS_STATUS.DISCONNECTED.id;
+          ws_state = CALL_STATUS.DISCONNECTED.id;
         }
 
       } catch (e) {
@@ -438,7 +438,7 @@
         await checkMediaPermissions();
         await getMediaStream();
 
-        ws_state = WS_STATUS.WAITING.id;
+        ws_state = CALL_STATUS.IDLE.id;
       } catch (e) {
         handleError(e, enterWaitingState);
       }
