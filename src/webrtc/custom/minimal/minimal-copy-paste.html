@@ -26,7 +26,7 @@
 <body>
   <div id="container">
     <div class="status-pill">
-      <div><span id="statusText">IDLE</span></div>
+      <div><span id="statusText">WAITING</span></div>
     </div>
 
     <div class="split-container">
@@ -130,7 +130,7 @@
     let pc = null;
     let localStream = null;
     let connectionTimeoutId = null;
-    let _call_state = WS_STATUS.IDLE.id;
+    let _call_state = CALL_STATUS.WAITING.id;
     Object.defineProperty(window, 'ws_state', {
       get: function() { return _call_state; },
       set: function(val) {
@@ -138,7 +138,7 @@
         updateUiForState();
 
         // Timeout Logic
-        if (connectionTimeoutId && val !== WS_STATUS.CONNECTING.id) {
+        if (connectionTimeoutId && val !== CALL_STATUS.CONNECTING.id) {
           clearTimeout(connectionTimeoutId);
           connectionTimeoutId = null;
         }
@@ -149,8 +149,8 @@
      * 연결 상태 UI 표시
      */
     function updateUiForState() {
-      const stateId = WS_STATUS[ws_state].id || '';
-      elStatusText.textContent = WS_STATUS[ws_state].label || '';
+      const stateId = CALL_STATUS[ws_state].id || '';
+      elStatusText.textContent = CALL_STATUS[ws_state].label || '';
 
       startCallBtn.style.display = 'none';
       endCallBtn.style.display = 'none';
@@ -159,30 +159,30 @@
       toggleAudioBtn.style.display = 'none';
 
       switch (stateId) {
-        case WS_STATUS.IDLE.id:
+        case CALL_STATUS.WAITING.id:
           break;
-        case WS_STATUS.WAITING.id:
+        case CALL_STATUS.IDLE.id:
           startCallBtn.style.display = 'block';
           toggleAudioBtn.style.display = 'block';
           toggleCameraBtn.style.display = 'block';
           break;
-        case WS_STATUS.CONNECTING.id:
-        case WS_STATUS.CONNECTED.id:
+        case CALL_STATUS.CONNECTING.id:
+        case CALL_STATUS.CONNECTED.id:
           endCallBtn.style.display = 'block';
           toggleAudioBtn.style.display = 'block';
           toggleCameraBtn.style.display = 'block';
           break;
-        case WS_STATUS.ERROR.id:
+        case CALL_STATUS.ERROR.id:
           retryBtn.style.display = 'block';
           break;
-        case WS_STATUS.DISCONNECTED.id:
+        case CALL_STATUS.DISCONNECTED.id:
         default:
           break;
       }
       
       // 로딩 오버레이 제어
       const overlay = document.getElementById('loadingOverlay');
-      if (stateId === WS_STATUS.CONNECTING.id) {
+      if (stateId === CALL_STATUS.CONNECTING.id) {
         overlay.style.display = 'flex';
       } else {
         overlay.style.display = 'none';
@@ -254,12 +254,12 @@
 
         event.track.onmute = () => {
           console.warn("Remote track muted → 수신 중단");
-          ws_state = WS_STATUS.DISCONNECTED.id;
+          ws_state = CALL_STATUS.DISCONNECTED.id;
         };
 
         event.track.onended = () => {
           console.log('Remote track ended');
-          ws_state = WS_STATUS.DISCONNECTED.id;
+          ws_state = CALL_STATUS.DISCONNECTED.id;
         };
       };
 
@@ -274,11 +274,11 @@
 
         switch (pc.iceConnectionState) {
           case 'checking':
-            ws_state = WS_STATUS.CONNECTING.id;
+            ws_state = CALL_STATUS.CONNECTING.id;
             break;
           case 'connected':
           case 'completed':
-            ws_state = WS_STATUS.CONNECTED.id;
+            ws_state = CALL_STATUS.CONNECTED.id;
             break;
           case 'failed':
             break;
@@ -306,7 +306,7 @@
       localVideo.srcObject = null;
       remoteVideo.srcObject = null;
 
-      ws_state = WS_STATUS.DISCONNECTED.id; 
+      ws_state = CALL_STATUS.DISCONNECTED.id; 
 
       // UI 초기화
       sdpBox.value = '';
@@ -322,11 +322,11 @@
         await checkMediaPermissions();
         await getMediaStream();
 
-        ws_state = WS_STATUS.WAITING.id;
+        ws_state = CALL_STATUS.IDLE.id;
       } catch (e) {
         console.error(e);
         alert(e.message);
-        ws_state = WS_STATUS.ERROR.id;
+        ws_state = CALL_STATUS.ERROR.id;
       }
     }
 
@@ -352,7 +352,7 @@
     // Offer 생성: 수동/WS 병행
     async function handleCreateOffer() {
       try {
-        ws_state = WS_STATUS.CONNECTING.id;
+        ws_state = CALL_STATUS.CONNECTING.id;
 
         // Timeout Start
         if (connectionTimeoutId) clearTimeout(connectionTimeoutId);
@@ -370,7 +370,7 @@
       } catch (e) {
         console.error(e);
         alert(e.message);
-        ws_state = WS_STATUS.ERROR.id;
+        ws_state = CALL_STATUS.ERROR.id;
       }
     };
 
