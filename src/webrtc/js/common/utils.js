@@ -129,6 +129,14 @@ window.handleError = function(e, retryAction) {
   }
 };
 
+/** Firebase Bridge for non-module scripts */
+window.dbRef = null;
+window.onDBValue = null;
+window.onDBChildAdded = null;
+window.setDB = null;
+window.pushDB = null;
+window.removeDB = null;
+
 /**
  * 네이티브 웹뷰 브릿지
  * 웹 → 앱으로 웹뷰 종료 신호 전송

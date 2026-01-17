@@ -11,24 +11,9 @@
   </script>
   <script src="/src/webrtc/js/common/set-title.js"></script>
   <script src="/src/webrtc/js/common/utils.js"></script>
-  <style>
-    :root {
-      --bg-color: #202124;
-      --text: #ffffff;
-    }
-    .video-box {
-      position: relative;
-    }
-    #loadingOverlay {
-      position: absolute !important; 
-      top: 0; 
-      left: 0;
-      width: 100%; 
-      height: 100%;
-      background: rgba(0,0,0,0.5);
-      z-index: 5;
-    }
-  </style>
+  <script src="/src/webrtc/js/common/CallManager.js"></script>
+  <script src="/src/webrtc/js/common/SignalingService.js"></script>
+  <link rel="stylesheet" href="/src/webrtc/css/main.css">
 </head>
 <body>
   <div id='container'>
@@ -40,24 +25,25 @@
       <div class="video-box">
         <div class="label">상대방 (Remote)</div>
         <video id="remoteVideo" autoplay playsinline></video>
-        
-        <div id="loadingOverlay" class="loading-overlay" style="display: none;"> <!-- 초기에는 숨김 -->
-          <div class="spinner"></div>
-        </div>
       </div>
       <div class="video-box">
         <div class="label">나 (Local)</div>
         <video id="localVideo" autoplay playsinline></video>
       </div>
     </div>
+
+    <div id="loadingOverlay" class="loading-overlay">
+      <div class="spinner"></div>
+      <div class="loading-text">연결 중...</div>
+    </div>
   
     <div class="control-bar">
       <button id="startCallBtn" class="btn-primary" onclick="startCall()" style="display:none">통화 시작</button>
       <button id="receiveCallBtn" class="btn-primary" onclick="receiveCall()" style="display:none">전화 받기</button>
       <button id="endCallBtn" class="btn-danger" onclick="endCall()" style="display:none">통화 종료</button>
-      <button id="toggleCameraBtn" class="btn-secondary" onclick="toggleMedia('video')" style="display:none">카메라 On</button>
-      <button id="toggleAudioBtn" class="btn-secondary" onclick="toggleMedia('audio')" style="display:none">마이크 On</button>
-      <button id="retryBtn" class="btn-primary" onclick="enterWaitingState()" style="display:none">다시 연결</button>
+      <button id="toggleCameraBtn" class="btn-secondary" onclick="callManager.toggleMedia('video')" style="display:none">카메라 On</button>
+      <button id="toggleAudioBtn" class="btn-secondary" onclick="callManager.toggleMedia('audio')" style="display:none">마이크 On</button>
+      <button id="retryBtn" class="btn-primary" onclick="init()" style="display:none">다시 연결</button>
     </div>
   </div>
 
@@ -65,393 +51,96 @@
     import { initializeApp } from 'firebase/app';
     import { getDatabase, ref, set, onValue, push, onChildAdded, remove } from 'firebase/database';
 
-    let app, db, roomRef;
-
-    // 서버로부터 설정값을 받아온 후 초기화
-    async function initFirebase() {
-      const firebaseConfig = {
-        apiKey: "AIzaSyAZ6FOlTH6RxLa8crgkaJeFj0wN4n0RkkA",
-        authDomain: "webrtc-test-2c0e5.firebaseapp.com",
-        databaseURL: "https://webrtc-test-2c0e5-default-rtdb.firebaseio.com",
-        projectId: "webrtc-test-2c0e5",
-        storageBucket: "webrtc-test-2c0e5.appspot.com",
-        messagingSenderId: "1066252661216",
-        appId: "1:1066252661216:web:2521c2b6c2b6c2b6c2b6c2",
-      }
-      app = initializeApp(firebaseConfig);
-      db = getDatabase(app);
-      roomRef = ref(db, 'calls/room1'); // 시그널링 채널 생성
-      
-      console.log("(1) Firebase 연결 성공");
-    }
-
-    const elStatusText = document.getElementById('statusText');
-    const elWsStatusText = document.getElementById('wsStatusText');
-
-    const localVideo = document.getElementById('localVideo');
-    const remoteVideo = document.getElementById('remoteVideo');
-
-    const startCallBtn = document.getElementById('startCallBtn');
-    const receiveCallBtn = document.getElementById('receiveCallBtn');
-    const endCallBtn = document.getElementById('endCallBtn');
-    const toggleCameraBtn = document.getElementById('toggleCameraBtn');
-    const toggleAudioBtn = document.getElementById('toggleAudioBtn');
-    const retryBtn = document.getElementById('retryBtn');
-
-    const CONFIG = {
-      iceServers: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
-      connectTimeoutMs: 10000
+    const firebaseConfig = {
+      apiKey: "AIzaSyAZ6FOlTH6RxLa8crgkaJeFj0wN4n0RkkA",
+      authDomain: "webrtc-test-2c0e5.firebaseapp.com",
+      databaseURL: "https://webrtc-test-2c0e5-default-rtdb.firebaseio.com",
+      projectId: "webrtc-test-2c0e5",
+      storageBucket: "webrtc-test-2c0e5.appspot.com",
+      messagingSenderId: "1066252661216",
+      appId: "1:1066252661216:web:2521c2b6c2b6c2b6c2b6c2",
     };
 
-    let pc = null;
-    let localStream = null;
-    let connectionTimeoutId = null;
-    let _call_state = CALL_STATUS.WAITING.id;
-    Object.defineProperty(window, 'ws_state', {
-      get: function() { return _call_state; },
-      set: function(val) {
-        _call_state = val;
-        updateUiForState();
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
 
-        // Timeout 초기화
-        if (connectionTimeoutId && val !== CALL_STATUS.CONNECTING.id) {
-          clearTimeout(connectionTimeoutId);
-          connectionTimeoutId = null;
+    // Bridge Firebase to global for SignalingService
+    window.dbRef = ref;
+    window.onDBValue = onValue;
+    window.onDBChildAdded = onChildAdded;
+    window.setDB = set;
+    window.pushDB = push;
+    window.removeDB = remove;
+
+    const signaling = new FirebaseSignaling(db, 'calls/room1');
+    const callManager = new CallManager(
+      { iceServers: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } },
+      (state) => updateUi(state),
+      (candidate) => signaling.send({ type: 'candidate', role: callManager.role, candidate: candidate.toJSON() })
+    );
+
+    signaling.onMessage = async (data) => {
+      if (data.type === 'offer' && !callManager.pc.remoteDescription) {
+        const answer = await callManager.handleOffer(data.offer);
+        signaling.send({ type: 'answer', answer: { type: answer.type, sdp: answer.sdp } });
+      } else if (data.type === 'answer') {
+        await callManager.handleAnswer(data.answer);
+      } else if (data.type === 'candidate') {
+        // 내 역할이 아닌 후보자만 추가
+        if (data.role !== callManager.role) {
+          await callManager.addIceCandidate(data.candidate);
         }
       }
-    });
-
-    window.startCall = startCall;
-    window.receiveCall = receiveCall;
-    window.endCall = endCall;
-    window.toggleMedia = toggleMedia;
-    window.enterWaitingState = enterWaitingState;
-    window.CONFIG = CONFIG;
-
-    /**
-     * 연결 상태 UI 표시
-     */
-    function updateUiForState() {
-      const stateId = CALL_STATUS[ws_state].id || '';
-      elStatusText.textContent = CALL_STATUS[ws_state].label || '';
-
-      startCallBtn.style.display = 'none';
-      receiveCallBtn.style.display = 'none';
-      retryBtn.style.display = 'none';
-      endCallBtn.style.display = 'none';
-      toggleAudioBtn.style.display = 'none';
-      toggleCameraBtn.style.display = 'none';
-
-      switch (stateId) {
-        case CALL_STATUS.WAITING.id:
-          break;
-        case CALL_STATUS.IDLE.id:
-          startCallBtn.style.display = 'block';
-          receiveCallBtn.style.display = 'block';
-          toggleAudioBtn.style.display = 'block';
-          toggleCameraBtn.style.display = 'block';
-          break;
-        case CALL_STATUS.CONNECTING.id:
-        case CALL_STATUS.CONNECTED.id:
-          endCallBtn.style.display = 'block';
-          toggleAudioBtn.style.display = 'block';
-          toggleCameraBtn.style.display = 'block';
-          break;
-        case CALL_STATUS.ERROR.id:
-          retryBtn.style.display = 'block';
-          break;
-        case CALL_STATUS.DISCONNECTED.id:
-        default:
-          break;
-      }
-
-      // 로딩 오버레이 제어
-      const overlay = document.getElementById('loadingOverlay');
-      if (stateId === CALL_STATUS.CONNECTING.id) {
-        overlay.style.display = 'flex';
-      } else {
-        overlay.style.display = 'none';
-      }
-    }
-
-    /**
-     * 종료 알림 표시
-     */
-    function showDisconnectPopup(reason) {
-      alert(reason);
-      enterWaitingState();
-    }
-    
-    /**
-     * 미디어 장치 제어
-     * @param {string} type 'video' | 'audio'
-     */
-    function toggleMedia(type) {
-      if (!localStream) return;
-
-      const isVideo = type === 'video';
-      const tracks = isVideo ? localStream.getVideoTracks() : localStream.getAudioTracks();
-      const track = tracks[0];
-
-      if (track) {
-        track.enabled = !track.enabled;
-        const btn = isVideo ? toggleCameraBtn : toggleAudioBtn;
-        const label = isVideo ? '카메라' : '마이크';
-        btn.textContent = `${label} ${track.enabled ? 'On' : 'Off'}`;
-      }
-    }
-    
-    /**
-     * 카메라/마이크 권한 요청
-     */
-    async function checkMediaPermissions() {
-      const cameraStatus = await navigator.permissions.query({ name: 'camera' });
-      const microphoneStatus = await navigator.permissions.query({ name: 'microphone' });
-
-      if (cameraStatus.state === 'denied') {
-        throw new Error(ERRORS.CAMERA_PERMISSION);
-      }
-      if (microphoneStatus.state === 'denied') {
-        throw new Error(ERRORS.MIC_PERMISSION);
-      }
-    }
-
-    /**
-     * 미디어 장치 연결
-     */
-    async function getMediaStream() {
-      if (localStream) return;
-
-      const devices = await navigator.mediaDevices.enumerateDevices();
-
-      const hasCamera = devices.some(d => d.kind === 'videoinput');
-      const hasMic = devices.some(d => d.kind === 'audioinput');
-
-      if (!hasCamera) {
-        throw new Error(ERRORS.NO_CAMERA);
-      }
-      if (!hasMic) {
-        throw new Error(ERRORS.NO_MIC);
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: true, 
-        audio: true
-      });
-      localStream = stream;
-
-      // 삼성인터넷 음소거 자동재생 현상 방지 로직
-      // 로컬 화면용으로 비디오 트랙만 따로 뽑은 새로운 스트림 적용
-      const videoOnlyStream = new MediaStream(stream.getVideoTracks());
-      localVideo.srcObject = videoOnlyStream;
-    }
-
-    /**
-     * RTCPeerConnection(PC) 생성
-     */
-    function ensurePC() {
-      if (pc) return;
-      
-      pc = new RTCPeerConnection(CONFIG.iceServers);
-
-      if (localStream) {
-        localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
-      }
-
-      const remoteStream = new MediaStream();
-      remoteVideo.srcObject = remoteStream;
-
-      /**
-       * 상대방이 보낸 audio/video track 수신 핸들러
-       * WebRTC는 track 단위로 데이터를 전송하므로
-       * 수신된 track을 remoteStream에 추가 → 화면에 표시됨
-       */
-      pc.ontrack = (event) => {
-        console.log('ontrack', event);
-        const stream = event.streams?.[0];
-
-        if (stream) {
-          stream.getTracks().forEach((t) => remoteStream.addTrack(t));
-        } else {
-          remoteStream.addTrack(event.track);
-        }
-
-        event.track.onmute = () => {
-          console.warn("Remote track muted → 수신 중단");
-          ws_state = CALL_STATUS.DISCONNECTED.id;
-        };
-
-        event.track.onended = () => {
-          console.log('Remote track ended');
-          ws_state = CALL_STATUS.DISCONNECTED.id;
-        };
-      };
-
-      /**
-       * ICE 후보(candidates)가 생성될 때마다 호출되는 핸들러
-       * Firebase push하여 저장
-       */
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          const role = (ws_state === CALL_STATUS.CONNECTING.id) ? 'callerCandidates' : 'calleeCandidates';
-          push(ref(db, `calls/room1/${role}`), event.candidate.toJSON());
-        }
-      };
-
-      /**
-       * ICE 연결 상태 변화 핸들러
-       */
-      pc.oniceconnectionstatechange = () => {
-        console.log('ICE state:', pc.iceConnectionState);
-
-        switch (pc.iceConnectionState) {
-          case 'checking': // P2P 연결 시도 중
-            ws_state = CALL_STATUS.CONNECTING.id;
-            break;
-          case 'connected': // P2P 연결 완료
-          case 'completed':
-            ws_state = CALL_STATUS.CONNECTED.id;
-            break;
-          case 'failed': // 연결 실패
-            handleError(new Error("P2P 연결에 실패했습니다. (ICE Failed)"), startCall);
-            break;
-          case 'disconnected': // 연결 종료
-          case 'closed': // 연결 종료
-            if (ws_state === CALL_STATUS.CONNECTED.id) {
-              showDisconnectPopup(ERRORS.NETWORK_UNSTABLE);
-            }
-            endCall();
-            break;
-        }
-      };
-    }
-
-    /**
-     * 통화 연결 요청
-     */
-    async function startCall() {
-      try {
-        // 로딩 표시
-        ws_state = CALL_STATUS.CONNECTING.id;
-
-        // Timeout Start
-        if (connectionTimeoutId) clearTimeout(connectionTimeoutId);
-        connectionTimeoutId = setTimeout(() => {
-          endCall();
-          handleError(new Error(ERRORS.CONNECTION_TIMEOUT));
-        }, CONFIG.connectTimeoutMs);
-
-        // pc 연결
-        ensurePC();
-
-        // offer 생성
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        await set(ref(db, 'calls/room1/offer'), { type: offer.type, sdp: offer.sdp });
-
-        // 상대방 Answer 감시
-        onValue(ref(db, 'calls/room1/answer'), async (snapshot) => {
-          const data = snapshot.val();
-          if (data && !pc.remoteDescription) {
-            await pc.setRemoteDescription(new RTCSessionDescription(data));
-          }
-        });
-
-        // 상대방 ICE Candidate 감시
-        onChildAdded(ref(db, 'calls/room1/calleeCandidates'), (snapshot) => {
-          const data = snapshot.val();
-          if (data && pc) {
-            pc.addIceCandidate(new RTCIceCandidate(data)).catch(e => console.error("Error adding candidate:", e));
-          }
-        });
-      } catch (e) {
-        handleError(e, startCall);
-      }
-    }
-
-    /**
-     * 통화 수신
-     */
-    async function receiveCall() {
-      ensurePC();
-
-      // Firebase에 올라온 Offer 감시
-      onValue(ref(db, 'calls/room1/offer'), async (snapshot) => {
-        const data = snapshot.val();
-        if (data && !pc.remoteDescription) {
-          await pc.setRemoteDescription(new RTCSessionDescription(data));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          await set(ref(db, 'calls/room1/answer'), { type: answer.type, sdp: answer.sdp });
-        }
-      });
-
-      // 상대방 ICE Candidate 감시
-      onChildAdded(ref(db, 'calls/room1/callerCandidates'), (snapshot) => {
-        const data = snapshot.val();
-        if (data && pc) {
-          pc.addIceCandidate(new RTCIceCandidate(data)).catch(e => console.error("Error adding candidate:", e));
-        }
-      });
-    }
-    
-    /**
-     * 통화 종료 요청
-     */
-    async function endCall() {
-      try {
-        const currentState = ws_state;
-
-        // pc 해제
-        if (pc) {
-          pc.close();
-          pc = null;
-        }
-
-        // Firebase 데이터 삭제
-        await remove(roomRef);
-
-        // 상태별 분기 처리
-        if (currentState === CALL_STATUS.CONNECTING.id) {
-          ws_state = CALL_STATUS.IDLE.id;
-        } else {
-          // 로컬 미디어 해제
-          if (localStream) {
-            localStream.getTracks().forEach(track => track.stop());
-            localStream = null;
-          }
-
-          localVideo.srcObject = null;
-          ws_state = CALL_STATUS.DISCONNECTED.id;
-        }
-
-      } catch (e) {
-        handleError(e);
-      }
-    }
-
-    /**
-     * 대기 상태 진입
-     */
-    async function enterWaitingState() {
-      try {
-        await checkMediaPermissions();
-        await getMediaStream();
-
-        ws_state = CALL_STATUS.IDLE.id;
-      } catch (e) {
-        handleError(e, enterWaitingState);
-      }
-    }
-    
-    window.onload = () => {
-      initFirebase();
-      updateUiForState();
-      enterWaitingState();
     };
-    window.onbeforeunload = () => {
-      endCall();
+
+    function updateUi(state) {
+      document.getElementById('statusText').textContent = CALL_STATUS[state].label;
+      const btns = ['startCallBtn', 'receiveCallBtn', 'endCallBtn', 'toggleCameraBtn', 'toggleAudioBtn', 'retryBtn'];
+      btns.forEach(id => document.getElementById(id).style.display = 'none');
+      document.getElementById('loadingOverlay').style.display = (state === CALL_STATUS.CONNECTING.id) ? 'flex' : 'none';
+
+      if (state === CALL_STATUS.IDLE.id) {
+        ['startCallBtn', 'receiveCallBtn', 'toggleCameraBtn', 'toggleAudioBtn'].forEach(id => document.getElementById(id).style.display = 'block');
+      } else if (state === CALL_STATUS.CONNECTING.id || state === CALL_STATUS.CONNECTED.id) {
+        ['endCallBtn', 'toggleCameraBtn', 'toggleAudioBtn'].forEach(id => document.getElementById(id).style.display = 'block');
+      } else if (state === CALL_STATUS.ERROR.id) {
+        document.getElementById('retryBtn').style.display = 'block';
+      }
+    }
+
+    window.startCall = async () => {
+      callManager.role = 'caller';
+      callManager.ensurePC(document.getElementById('remoteVideo'));
+      await signaling.connect();
+      const offer = await callManager.createOffer();
+      signaling.send({ type: 'offer', offer: { type: offer.type, sdp: offer.sdp } });
     };
+
+    window.receiveCall = async () => {
+      callManager.role = 'callee';
+      callManager.ensurePC(document.getElementById('remoteVideo'));
+      await signaling.connect();
+    };
+
+    window.endCall = async () => {
+      await signaling.send({ type: 'leave' });
+      callManager.closePC();
+      callManager.stopMedia();
+      document.getElementById('localVideo').srcObject = null;
+      callManager.state = CALL_STATUS.DISCONNECTED.id;
+    };
+
+    async function init() {
+      try {
+        await callManager.getMediaStream(document.getElementById('localVideo'));
+        callManager.state = CALL_STATUS.IDLE.id;
+      } catch (e) {
+        handleError(e, init);
+      }
+    }
+
+    window.init = init;
+    window.onload = init;
   </script>
 </body>
 </html>
