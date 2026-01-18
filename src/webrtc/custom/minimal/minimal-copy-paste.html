@@ -36,17 +36,17 @@
       <button id="retryBtn" class="btn-primary" onclick="init()" style="display:none">다시 연결</button>
     </div>
 
-    <div id="manualPanel" class="panel" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; background: rgba(32, 33, 36, 0.95); color: #fff; z-index: 1;">
+    <div id="manualPanel" class="panel" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; background: rgba(32, 33, 36, 0.95); color: #fff; z-index: 100;">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; margin-bottom: 15px; padding-bottom: 10px;">
         <h3 style="margin: 0;">수동 WebRTC 연결 방법</h3>
         <button class="btn-small" onclick="document.getElementById('manualPanel').style.display = 'none'">닫기</button>
       </div>
       
       <p class="sub-text" style="color: #aaa;">
-        - A에서 “Create Offer” 클릭 → A의 SDP에 Offer 텍스트 생성 및 복사<br/>
-        - A의 SDP Offer → B의 SDP에 붙여넣고 “Create Answer” 클릭 → B의 SDP에 Answer 텍스트 생성 및 복사<br/>
-        - B의 SDP Answer → A의 SDP에 붙여넣고 “Set Remote Answer” 클릭 → A의 ICE Candidates에 텍스트 생성 및 복사<br/>
-        - A의 ICE Candidates → B의 Remote ICE Candidates에 붙여넣고 “Add Remote ICE Candidates” 클릭<br/>
+        - A “Create Offer” 클릭 → A SDP Offer 텍스트 생성<br/>
+        - A SDP Offer 복사 → B SDP Offer 붙여넣기 → B “Create Answer” 클릭 → B SDP Answer 텍스트 생성<br/>
+        - B SDP Answer 복사 → A SDP Offer 붙여넣기 → A “Set Remote Answer” 클릭 → A ICE Candidates 텍스트 생성<br/>
+        - A ICE Candidates 복사 → B Remote ICE Candidates 붙여넣기 → B “Add Remote ICE Candidates” 클릭<br/>
       </p>
 
       <div class="row">
@@ -97,6 +97,7 @@
       window.CONFIG,
       (state) => updateUi(state),
       (candidate) => {
+        // 수동 연결을 위해 JSON 문자열 형태로 쌓아둠
         localCandidatesBox.value += JSON.stringify(candidate) + '\n';
       }
     );
@@ -121,11 +122,13 @@
 
     async function handleCreateOffer() {
       try {
+        callManager.role = 'caller'; // 역할 명시
         callManager.state = window.CALL_STATUS.CONNECTING.id;
         callManager.ensurePC(document.getElementById('remoteVideo'));
         const offer = await callManager.createOffer();
         sdpBox.value = JSON.stringify(offer);
-        document.getElementById('manualPanel').style.display = 'none';
+        // 창을 닫지 않고 계속 진행할 수 있게 유지하거나, 사용자 편의를 위해 알림
+        alert('Offer 생성 완료! 아래 SDP를 복사하여 상대방에게 전달하세요.');
       } catch (e) {
         handleError(e);
       }
@@ -133,11 +136,13 @@
 
     async function handleCreateAnswer() {
       try {
+        callManager.role = 'callee'; // 역할 명시
         callManager.state = window.CALL_STATUS.CONNECTING.id;
         callManager.ensurePC(document.getElementById('remoteVideo'));
         const remoteOffer = JSON.parse(sdpBox.value.trim());
         const answer = await callManager.handleOffer(remoteOffer);
         sdpBox.value = JSON.stringify(answer);
+        alert('Answer 생성 완료! 아래 SDP를 복사하여 상대방에게 전달하세요.');
       } catch (e) {
         handleError(e);
       }
@@ -166,25 +171,20 @@
     }
 
     function endCall() {
-      const state = callManager.state;
-      const isConnectionAttempt = (state === CALL_STATUS.CONNECTING.id || state === CALL_STATUS.ERROR.id);
-      
       callManager.stopTimeout();
       callManager.closePC();
-
-      if (isConnectionAttempt) {
-        callManager.state = CALL_STATUS.IDLE.id;
-      } else {
-        callManager.stopMedia();
-        document.getElementById('localVideo').srcObject = null;
-        document.getElementById('remoteVideo').srcObject = null;
-        callManager.state = CALL_STATUS.DISCONNECTED.id;
-      }
+      callManager.stopMedia();
+      
+      document.getElementById('localVideo').srcObject = null;
+      document.getElementById('remoteVideo').srcObject = null;
+      
+      callManager.state = CALL_STATUS.DISCONNECTED.id;
       updateUi(callManager.state);
 
       sdpBox.value = '';
       localCandidatesBox.value = '';
       remoteCandidatesBox.value = '';
+      document.getElementById('manualPanel').style.display = 'none';
     }
 
     async function init() {
