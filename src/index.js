@@ -1,7 +1,7 @@
 import { Router } from './router';
 import { RootPage } from './pages/RootPage';
 import { WebRTCPage } from './pages/WebRTCPage';
-import './lib/ga';
+import './webrtc/js/common/ga';
 
 window.addEventListener('DOMContentLoaded', () => {
   console.log('0.0.0.4');

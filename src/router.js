@@ -1,4 +1,4 @@
-import { trackPageview } from './lib/ga';
+import { trackPageview } from './webrtc/js/common/ga';
 
 export class Router {
   constructor(routes) {

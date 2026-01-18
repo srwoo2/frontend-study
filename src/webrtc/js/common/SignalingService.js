@@ -1,6 +1,16 @@
 /**
  * SignalingService Base Class
  */
+/** Firebase Bridge for non-module scripts */
+window.dbRef = null;
+window.onDBValue = null;
+window.onDBChildAdded = null;
+window.setDB = null;
+window.pushDB = null;
+window.removeDB = null;
+window.getDB = null;
+window.onDisconnectDB = null;
+
 class SignalingService {
   constructor(url) {
     this.url = url;
