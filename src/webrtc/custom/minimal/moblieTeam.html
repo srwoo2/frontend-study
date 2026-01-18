@@ -18,7 +18,7 @@
 <body>
   <div id='container'>
     <div class="status-pill">
-      <div><span id="statusText">WAITING</span></div>
+      <div><span id="statusText">접속</span></div>
     </div>
   
     <div class="split-container">
@@ -30,11 +30,12 @@
         <div class="label">나 (Local)</div>
         <video id="localVideo" autoplay playsinline></video>
       </div>
-    </div>
 
-    <div id="loadingOverlay" class="loading-overlay">
-      <div class="spinner"></div>
-      <div class="loading-text">연결 중...</div>
+      <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text">연결중</div>
+        <div id="countdownText" class="countdown-text"></div>
+      </div>
     </div>
   
     <div class="control-bar">
@@ -43,13 +44,13 @@
       <button id="endCallBtn" class="btn-danger" onclick="endCall()" style="display:none">통화 종료</button>
       <button id="toggleCameraBtn" class="btn-secondary" onclick="callManager.toggleMedia('video')" style="display:none">카메라 On</button>
       <button id="toggleAudioBtn" class="btn-secondary" onclick="callManager.toggleMedia('audio')" style="display:none">마이크 On</button>
-      <button id="retryBtn" class="btn-primary" onclick="init()" style="display:none">다시 연결</button>
+      <button id="retryBtn" class="btn-primary" onclick="startCall()" style="display:none">다시 연결</button>
     </div>
   </div>
 
   <script type="module">
     import { initializeApp } from 'firebase/app';
-    import { getDatabase, ref, set, onValue, push, onChildAdded, remove } from 'firebase/database';
+    import { getDatabase, ref, set, onValue, push, onChildAdded, remove, get, onDisconnect } from 'firebase/database';
 
     const firebaseConfig = {
       apiKey: "AIzaSyAZ6FOlTH6RxLa8crgkaJeFj0wN4n0RkkA",
@@ -71,45 +72,91 @@
     window.setDB = set;
     window.pushDB = push;
     window.removeDB = remove;
+    window.getDB = get;
+    window.onDisconnectDB = onDisconnect;
 
-    const signaling = new FirebaseSignaling(db, 'calls/room1');
-    const callManager = new CallManager(
-      { iceServers: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } },
+    const signaling = new window.FirebaseSignaling(db, 'calls/room1');
+    const callManager = new window.CallManager(
+      window.CONFIG, 
       (state) => updateUi(state),
       (candidate) => signaling.send({ type: 'candidate', role: callManager.role, candidate: candidate.toJSON() })
     );
+    window.callManager = callManager; // For toggleMedia in onclick
 
     signaling.onMessage = async (data) => {
-      if (data.type === 'offer' && !callManager.pc.remoteDescription) {
-        const answer = await callManager.handleOffer(data.offer);
-        signaling.send({ type: 'answer', answer: { type: answer.type, sdp: answer.sdp } });
-      } else if (data.type === 'answer') {
-        await callManager.handleAnswer(data.answer);
-      } else if (data.type === 'candidate') {
-        // 내 역할이 아닌 후보자만 추가
-        if (data.role !== callManager.role) {
-          await callManager.addIceCandidate(data.candidate);
+      try {
+        if (data.type === 'offer') {
+          const isIdle = (callManager.state === window.CALL_STATUS.IDLE.id || callManager.state === window.CALL_STATUS.WAITING.id);
+          
+          // 수신자 역할이거나, 대기 상태에서 제안이 온 경우(자동 수신) 처리
+          if (callManager.role === 'callee' || isIdle) {
+            callManager.role = 'callee';
+            callManager.state = window.CALL_STATUS.CONNECTING.id;
+
+            callManager.ensurePC(document.getElementById('remoteVideo'));
+            const answer = await callManager.handleOffer(data.offer);
+            signaling.send({ type: 'answer', answer });
+          }
+        } else if (data.type === 'answer' && callManager.role === 'caller') {
+          await callManager.handleAnswer(data.answer);
+        } else if (data.type === 'candidate') {
+          if (data.role !== callManager.role) {
+            await callManager.addIceCandidate(data.candidate);
+          }
+        } else if (data.type === 'leave') {
+          // 상대방이 비정상 종료(탭 닫기 등)한 경우에만 알림 표시
+          if (data.reason === 'error') {
+            alert(window.ERRORS.CALL_PEER_LEFT);
+          }
+          // 상태 복구
+          if (callManager.state !== window.CALL_STATUS.WAITING.id && callManager.state !== window.CALL_STATUS.IDLE.id) {
+            await window.endCall('normal');
+          }
         }
+      } catch (e) {
+        console.error("Signaling message handling error:", e);
       }
     };
 
     function updateUi(state) {
-      document.getElementById('statusText').textContent = CALL_STATUS[state].label;
+      console.log('UI Update:', state);
+      if (!window.CALL_STATUS[state]) {
+        console.warn('Unknown state:', state);
+        return;
+      }
+      
+      const statusText = document.getElementById('statusText');
+      if (statusText) {
+        statusText.textContent = window.CALL_STATUS[state].label;
+      }
       const btns = ['startCallBtn', 'receiveCallBtn', 'endCallBtn', 'toggleCameraBtn', 'toggleAudioBtn', 'retryBtn'];
       btns.forEach(id => document.getElementById(id).style.display = 'none');
-      document.getElementById('loadingOverlay').style.display = (state === CALL_STATUS.CONNECTING.id) ? 'flex' : 'none';
+      // 통화를 거는 쪽(caller)일 때만 연결중 로딩바 표시
+      const showLoading = (state === window.CALL_STATUS.CONNECTING.id && callManager.role === 'caller');
+      document.getElementById('loadingOverlay').style.display = showLoading ? 'flex' : 'none';
 
-      if (state === CALL_STATUS.IDLE.id) {
+      if (state === window.CALL_STATUS.IDLE.id || state === window.CALL_STATUS.WAITING.id) {
         ['startCallBtn', 'receiveCallBtn', 'toggleCameraBtn', 'toggleAudioBtn'].forEach(id => document.getElementById(id).style.display = 'block');
-      } else if (state === CALL_STATUS.CONNECTING.id || state === CALL_STATUS.CONNECTED.id) {
+      } else if (state === window.CALL_STATUS.CONNECTING.id || state === window.CALL_STATUS.CONNECTED.id) {
         ['endCallBtn', 'toggleCameraBtn', 'toggleAudioBtn'].forEach(id => document.getElementById(id).style.display = 'block');
-      } else if (state === CALL_STATUS.ERROR.id) {
+      } else if (state === window.CALL_STATUS.ERROR.id) {
         document.getElementById('retryBtn').style.display = 'block';
       }
     }
 
     window.startCall = async () => {
+      await signaling.send({ type: 'leave' }); // Clear stale room data
       callManager.role = 'caller';
+      callManager.state = window.CALL_STATUS.CONNECTING.id;
+      callManager.startTimeout(
+        window.CONFIG.connectTimeoutMs, 
+        async () => {
+          await window.endCall(); // Cleanup and transition to WAITING (Ready)
+          window.handleError(new Error(window.ERRORS.CALL_TIMEOUT));
+        },
+        (sec) => { document.getElementById('countdownText').textContent = sec; }
+      );
+
       callManager.ensurePC(document.getElementById('remoteVideo'));
       await signaling.connect();
       const offer = await callManager.createOffer();
@@ -117,30 +164,68 @@
     };
 
     window.receiveCall = async () => {
-      callManager.role = 'callee';
-      callManager.ensurePC(document.getElementById('remoteVideo'));
-      await signaling.connect();
+      try {
+        const roomRef = window.dbRef(db, 'calls/room1');
+        const snapshot = await window.getDB(window.dbRef(db, 'calls/room1/offer'));
+        
+        if (!snapshot.exists()) {
+          alert(window.ERRORS.CALL_NOT_FOUND);
+          callManager.state = window.CALL_STATUS.IDLE.id;
+          return;
+        }
+
+        callManager.role = 'callee';
+        callManager.ensurePC(document.getElementById('remoteVideo'));
+        await signaling.connect();
+      } catch (e) {
+        window.handleError(e);
+      }
     };
 
-    window.endCall = async () => {
-      await signaling.send({ type: 'leave' });
+    window.endCall = async (reason = 'normal') => {
+      const state = callManager.state;
+      // 연결 중이거나, 연결 오류 상태인 경우 모두 '접속(Ready)'으로 간주하여 복구 시퀀스 실행
+      const isConnectionAttempt = (state === window.CALL_STATUS.CONNECTING.id || state === window.CALL_STATUS.ERROR.id);
+      
+      callManager.stopTimeout();
+      if (signaling) {
+        // 비정상 종료 시 이유를 담아 보냄
+        await signaling.send({ type: 'leave', reason });
+        signaling.stop();
+      }
       callManager.closePC();
-      callManager.stopMedia();
-      document.getElementById('localVideo').srcObject = null;
-      callManager.state = CALL_STATUS.DISCONNECTED.id;
+      
+      if (isConnectionAttempt) {
+        // 연결 중 취소/오류 시에는 미디어 스트림을 유지하고 다시 '대기(IDLE)' 상태로 복구
+        callManager.state = window.CALL_STATUS.IDLE.id;
+      } else {
+        // 통화 중 종료 시에는 미디어 정지 및 종료 상태로 전환
+        callManager.stopMedia();
+        document.getElementById('localVideo').srcObject = null;
+        callManager.state = window.CALL_STATUS.DISCONNECTED.id;
+      }
+      
+      // UI 동기화 강제 호출 (가끔 setter 호출 시점이 애매할 때 대비)
+      updateUi(callManager.state);
     };
+
+    // 탭 닫기/이동 시 비정상 종료 알림 보내기
+    window.addEventListener('pagehide', () => {
+      window.endCall('error');
+    });
 
     async function init() {
       try {
         await callManager.getMediaStream(document.getElementById('localVideo'));
-        callManager.state = CALL_STATUS.IDLE.id;
+        callManager.state = window.CALL_STATUS.IDLE.id;
       } catch (e) {
-        handleError(e, init);
+        callManager.state = window.CALL_STATUS.ERROR.id;
+        window.handleError(e, init);
       }
+      updateUi(callManager.state); // Sync initial/after-media UI
     }
 
-    window.init = init;
-    window.onload = init;
+    init(); // 직접 호출 (module은 지연 실행되므로 window.onload 대신 직접 수행이 더 확실)
   </script>
 </body>
 </html>

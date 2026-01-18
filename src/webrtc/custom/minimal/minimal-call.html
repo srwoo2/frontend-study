@@ -19,8 +19,8 @@
     </div>
 
     <div class="status-pill">
-      <div><span id="statusText">WAITING</span></div>
-      <div style="margin-left: 10px; padding-left: 10px; border-left: 1px solid #555;">WS: <span id="wsStatusText" style="color: red;">disconnected</span></div>
+      <div><span id="statusText">접속</span></div>
+      <div style="margin-left: 10px; padding-left: 10px; border-left: 1px solid #555;">WSS: <span id="wsStatusText" style="color: red;">disconnected</span></div>
     </div>
   
     <div class="split-container">
@@ -32,11 +32,12 @@
         <div class="label">나 (Local)</div>
         <video id="localVideo" autoplay playsinline></video>
       </div>
-    </div>
 
-    <div id="loadingOverlay" class="loading-overlay">
-      <div class="spinner"></div>
-      <div class="loading-text">연결 중...</div>
+      <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text">연결중</div>
+        <div id="countdownText" class="countdown-text"></div>
+      </div>
     </div>
   
     <div class="control-bar">
@@ -44,17 +45,12 @@
       <button id="endCallBtn" class="btn-danger" onclick="endCall()" style="display:none">통화 종료</button>
       <button id="toggleCameraBtn" class="btn-secondary" onclick="callManager.toggleMedia('video')" style="display:none">카메라 On</button>
       <button id="toggleAudioBtn" class="btn-secondary" onclick="callManager.toggleMedia('audio')" style="display:none">마이크 On</button>
-      <button id="retryBtn" class="btn-primary" onclick="init()" style="display:none">다시 연결</button>
+      <button id="retryBtn" class="btn-primary" onclick="startCall()" style="display:none">다시 연결</button>
     </div>
   </div>
 
   <script>
-    const CONFIG = {
-      wssUrl: `wss://${window.location.hostname}:3001`,
-      wssCertUrl: `https://${window.location.hostname}:3001`,
-      iceServers: { iceServers: [] },
-      connectTimeoutMs: 10000
-    };
+    // Global window.CONFIG used (from utils.js)
 
     const ui = {
       status: document.getElementById('statusText'),
@@ -71,12 +67,12 @@
 
     // 1. Signaling 초기화
     const signaling = new WebSocketSignaling(
-      CONFIG.wssUrl,
+      window.CONFIG.wssUrl,
       () => { ui.wsStatus.textContent = 'connected'; ui.wsStatus.style.color = 'white'; },
       (e) => { 
         ui.wsStatus.textContent = 'disconnected'; ui.wsStatus.style.color = 'red';
         if (event.code !== 1000 && (callManager.state === CALL_STATUS.CONNECTED.id || callManager.state === CALL_STATUS.CONNECTING.id)) {
-           alert(ERRORS.DISCONNECTED_BY_SERVER);
+           alert(ERRORS.SIGNAL_DISCONNECTED);
         }
       },
       (e) => console.error("WS Error", e)
@@ -84,50 +80,83 @@
 
     // 2. CallManager 초기화
     const callManager = new CallManager(
-      CONFIG,
+      window.CONFIG,
       (state) => updateUi(state),
-      (candidate) => signaling.send({ type: 'candidate', candidate })
+      (candidate) => {
+        if (callManager.role) {
+          signaling.send({ type: 'candidate', role: callManager.role, candidate });
+        }
+      }
     );
+    window.callManager = callManager;
 
     // Signaling 메시지 핸들러
     signaling.onMessage = async (data) => {
-      switch (data.type) {
-        case 'offer':
-          const answer = await callManager.handleOffer(data.offer);
-          signaling.send({ type: 'answer', answer });
-          break;
-        case 'answer':
+      try {
+        if (data.type === 'offer') {
+          const isIdle = (callManager.state === CALL_STATUS.IDLE.id || callManager.state === CALL_STATUS.WAITING.id);
+          const isConnectingNotCaller = (callManager.state === CALL_STATUS.CONNECTING.id && callManager.role !== 'caller');
+          
+          // 대기 중이거나, 내가 먼저 걸지 않은 연결 시도 중에 제안이 오면 수신자(callee)로 응답
+          if (isIdle || isConnectingNotCaller) {
+            callManager.role = 'callee';
+            callManager.state = window.CALL_STATUS.CONNECTING.id;
+            
+            callManager.ensurePC(document.getElementById('remoteVideo'));
+            const answer = await callManager.handleOffer(data.offer);
+            signaling.send({ type: 'answer', answer });
+          } 
+          // 만약 양쪽이 동시에 걸었을 때(Collision)에 대한 추가 처리가 필요할 수 있으나 현재는 단순화
+        } else if (data.type === 'answer' && callManager.role === 'caller') {
           await callManager.handleAnswer(data.answer);
-          break;
-        case 'candidate':
-          await callManager.addIceCandidate(data.candidate);
-          break;
-        case 'leave':
-          alert(ERRORS.PEER_LEFT);
-          endCall();
-          break;
+        } else if (data.type === 'candidate') {
+          if (data.role !== callManager.role) {
+            await callManager.addIceCandidate(data.candidate);
+          }
+        } else if (data.type === 'leave') {
+          if (data.reason === 'error') {
+            alert(window.ERRORS.CALL_PEER_LEFT);
+          }
+          endCall('normal');
+        }
+      } catch (e) {
+        console.error("Signaling error:", e);
       }
     };
 
     function updateUi(state) {
       ui.status.textContent = CALL_STATUS[state].label;
       Object.values(ui.btns).forEach(b => b.style.display = 'none');
-      ui.overlay.style.display = (state === CALL_STATUS.CONNECTING.id) ? 'flex' : 'none';
+      // 통화를 거는 쪽(caller)일 때만 연결중 로딩바 표시
+      const showLoading = (state === CALL_STATUS.CONNECTING.id && callManager.role === 'caller');
+      ui.overlay.style.display = showLoading ? 'flex' : 'none';
 
-      if (state === CALL_STATUS.IDLE.id) {
+      if (state === CALL_STATUS.IDLE.id || state === CALL_STATUS.WAITING.id) {
         ['start', 'audio', 'camera'].forEach(k => ui.btns[k].style.display = 'block');
       } else if (state === CALL_STATUS.CONNECTING.id || state === CALL_STATUS.CONNECTED.id) {
         ['end', 'audio', 'camera'].forEach(k => ui.btns[k].style.display = 'block');
       } else if (state === CALL_STATUS.ERROR.id) {
         ui.btns.retry.style.display = 'block';
+      } else if (state === CALL_STATUS.DISCONNECTED.id) {
+        // 모든 버튼 숨김 (유저 요청: 통화종료 시 버튼 안보이게)
+        Object.values(ui.btns).forEach(b => b.style.display = 'none');
       }
     }
 
     async function startCall() {
       try {
-        callManager.state = CALL_STATUS.CONNECTING.id;
+        callManager.role = 'caller';
+        callManager.state = window.CALL_STATUS.CONNECTING.id;
+        callManager.startTimeout(
+          window.CONFIG.connectTimeoutMs, 
+          () => {
+            endCall('error'); // Cleanup and transition to WAITING (Ready)
+            handleError(new Error(ERRORS.CALL_TIMEOUT));
+          },
+          (sec) => { document.getElementById('countdownText').textContent = sec; }
+        );
+        
         callManager.ensurePC(document.getElementById('remoteVideo'));
-        await signaling.connect();
         const offer = await callManager.createOffer();
         signaling.send({ type: 'offer', offer });
       } catch (e) {
@@ -135,22 +164,35 @@
       }
     }
 
-    function endCall() {
-      signaling.send({ type: 'leave' });
-      signaling.close();
+    async function endCall(reason = 'normal') {
+      callManager.stopTimeout();
+      if (signaling) {
+        signaling.send({ type: 'leave', reason });
+        signaling.stop();
+      }
       callManager.closePC();
       callManager.stopMedia();
+      
       document.getElementById('localVideo').srcObject = null;
+      document.getElementById('remoteVideo').srcObject = null;
+      
       callManager.state = CALL_STATUS.DISCONNECTED.id;
+      updateUi(callManager.state);
     }
+
+    window.addEventListener('pagehide', () => endCall('error'));
 
     async function init() {
       try {
         await callManager.getMediaStream(document.getElementById('localVideo'));
         callManager.state = CALL_STATUS.IDLE.id;
+        // WebSocket은 시작 시점에 미리 연결하여 대기 (제안 수신 가능하도록)
+        await signaling.connect();
       } catch (e) {
+        callManager.state = window.CALL_STATUS.ERROR.id;
         handleError(e, init);
       }
+      updateUi(callManager.state);
     }
 
     window.onload = init;

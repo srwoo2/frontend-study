@@ -53,9 +53,20 @@ window.clearText = function(id) {
 }
 
 /**
+ * 전역 설정
+ */
+window.CONFIG = {
+  connectTimeoutMs: 10000, // 10초
+  iceServers: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
+  wssUrl: `wss://${window.location.hostname}:3001`,
+  wssCertUrl: `https://${window.location.hostname}:3001`,
+};
+const CONFIG = window.CONFIG;
+
+/**
  * WebRTC 통화 상태를 나타내는 전역 객체
  */
-const CALL_STATUS = {
+window.CALL_STATUS = {
   WAITING:     { id: 'WAITING',     label: '접속' },
   IDLE:        { id: 'IDLE',        label: '대기' },
   CONNECTING:  { id: 'CONNECTING',  label: '연결중' },
@@ -63,21 +74,30 @@ const CALL_STATUS = {
   DISCONNECTED:{ id: 'DISCONNECTED',label: '종료' },
   ERROR:       { id: 'ERROR',       label: '오류'},
 };
+const CALL_STATUS = window.CALL_STATUS;
 
 /**
  * 에러 메시지 상수
  */
-const ERRORS = {
-  CAMERA_PERMISSION: '카메라 권한을 확인해 주세요.',
-  MIC_PERMISSION: '마이크 권한을 확인해 주세요.',
-  NO_CAMERA: '연결된 카메라가 없습니다.',
-  NO_MIC: '연결된 마이크가 없습니다.',
-  WS_ERROR: 'WebSocket Error\n서버가 실행 중인지, 혹은 인증서 허용(wss)이 되었는지 확인해 주세요.',
-  CONNECTION_TIMEOUT: '10초이상 연결이 안되어 종료합니다',
-  PEER_LEFT: '상대방이 통화를 종료하고 나갔습니다.',
-  DISCONNECTED_BY_SERVER: '서버와의 연결이 예기치 않게 끊겼습니다.',
-  NETWORK_UNSTABLE: '네트워크 상태가 불안정하여 연결이 끊겼습니다.',
+window.ERRORS = {
+  // Media 장치/권한 관련
+  MEDIA_PERMISSION: '카메라 권한을 확인해 주세요.',
+  MEDIA_NO_CAMERA: '연결된 카메라가 없습니다.',
+  MEDIA_NO_MIC: '연결된 마이크가 없습니다.',
+  MEDIA_SECURE_CONTEXT: '보안 연결(HTTPS/localhost)이 아니면 카메라/마이크를 사용할 수 없습니다.',
+  MEDIA_IN_USE: '장치가 이미 다른 곳에서 사용 중입니다.',
+
+  // 시그널링/서버 관련
+  SIGNAL_ERROR: '시그널링 서버 연결 오류가 발생했습니다.',
+  SIGNAL_DISCONNECTED: '서버와의 연결이 예기치 않게 끊겼습니다.',
+  SIGNAL_NETWORK_UNSTABLE: '네트워크 상태가 불안정하여 연결이 끊겼습니다.',
+
+  // 통화 로직 관련
+  CALL_TIMEOUT: '10초이상 연결이 안되어 종료합니다',
+  CALL_PEER_LEFT: '상대방이 통화를 종료하고 나갔습니다.',
+  CALL_NOT_FOUND: '연결 중인 통화가 없습니다.'
 };
+const ERRORS = window.ERRORS;
 
 /** LOGGING */
 window.log = function(level, msg) {
@@ -85,12 +105,15 @@ window.log = function(level, msg) {
   const line = `[${timestamp}] [${level}] ${msg}`;
   console.log(line);
 
-  fetch(CONFIG.logUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ level, message: msg, timestamp })
-  })
-  .catch(e => console.error('[ERROR] log :', e));
+  // CONFIG가 정의되어 있고 logUrl이 있는 경우에만 fetch 시도
+  if (typeof window.CONFIG !== 'undefined' && window.CONFIG.logUrl) {
+    fetch(window.CONFIG.logUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ level, message: msg, timestamp })
+    })
+    .catch(e => console.error('[ERROR] log :', e));
+  }
 };
 
 /**
@@ -107,8 +130,8 @@ window.handleError = function(e, retryAction) {
   const msg = e.message || e;
   alert(msg);
   
-  if (typeof log === 'function') {
-    log('ERROR', msg);
+  if (typeof window.log === 'function') {
+    window.log('ERROR', msg);
   }
 
   const retryBtn = document.getElementById('retryBtn');

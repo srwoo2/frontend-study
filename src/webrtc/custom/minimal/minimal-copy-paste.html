@@ -3,56 +3,41 @@
 <head>
   <script src="/src/webrtc/js/common/set-title.js"></script>
   <script src="/src/webrtc/js/common/utils.js"></script>
-</head>
-  <style>
-    :root {
-      --bg-color: #202124;
-      --text: #ffffff;
-    }
-    .video-box {
-      position: relative;
-    }
-    #loadingOverlay {
-      position: absolute !important; 
-      top: 0; 
-      left: 0;
-      width: 100%; 
-      height: 100%;
-      background: rgba(0,0,0,0.5);
-      z-index: 5;
-    }
-  </style>
+  <script src="/src/webrtc/js/common/CallManager.js"></script>
+  <link rel="stylesheet" href="/src/webrtc/css/main.css">
 </head>
 <body>
   <div id="container">
     <div class="status-pill">
-      <div><span id="statusText">WAITING</span></div>
+      <div><span id="statusText">접속</span></div>
     </div>
 
     <div class="split-container">
       <div class="video-box">
         <div class="label">상대방 (Remote)</div>
         <video id="remoteVideo" autoplay playsinline></video>
-
-        <div id="loadingOverlay" class="loading-overlay" style="display: none;">
-          <div class="spinner"></div>
-        </div>
       </div>
       <div class="video-box">
         <div class="label">나 (Local)</div>
         <video id="localVideo" autoplay playsinline muted></video>
       </div>
+
+      <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text">연결중</div>
+        <div id="countdownText" class="countdown-text"></div>
+      </div>
     </div>
 
     <div class="control-bar">
       <button id="startCallBtn" class="btn-primary" onclick="document.getElementById('manualPanel').style.display = 'block'">수동 통화 시작</button>
-      <button id="endCallBtn" class="btn-danger" onclick="endCall(); disconnectWss();" style="display:none">통화 종료</button>
-      <button id="toggleCameraBtn" class="btn-secondary" onclick="toggleMedia('video')" style="display:none">카메라 On</button>
-      <button id="toggleAudioBtn" class="btn-secondary" onclick="toggleMedia('audio')" style="display:none">마이크 On</button>
-      <button id="retryBtn" class="btn-primary" onclick="enterWaitingState()" style="display:none">다시 연결</button>
+      <button id="endCallBtn" class="btn-danger" onclick="endCall()" style="display:none">통화 종료</button>
+      <button id="toggleCameraBtn" class="btn-secondary" onclick="callManager.toggleMedia('video')" style="display:none">카메라 On</button>
+      <button id="toggleAudioBtn" class="btn-secondary" onclick="callManager.toggleMedia('audio')" style="display:none">마이크 On</button>
+      <button id="retryBtn" class="btn-primary" onclick="init()" style="display:none">다시 연결</button>
     </div>
 
-    <div id="manualPanel" class="panel" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; background: rgba(32, 33, 36, 0.95); z-index: 100;">
+    <div id="manualPanel" class="panel" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; background: rgba(32, 33, 36, 0.95); color: #fff; z-index: 1;">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; margin-bottom: 15px; padding-bottom: 10px;">
         <h3 style="margin: 0;">수동 WebRTC 연결 방법</h3>
         <button class="btn-small" onclick="document.getElementById('manualPanel').style.display = 'none'">닫기</button>
@@ -104,332 +89,118 @@
     </div>
   </div>
 
-
-
   <script>
-    const elStatusText = document.getElementById('statusText');
-
-    const localVideo = document.getElementById('localVideo');
-    const remoteVideo = document.getElementById('remoteVideo');
-
-    const startCallBtn = document.getElementById('startCallBtn');
-    const endCallBtn = document.getElementById('endCallBtn');
-    const toggleCameraBtn = document.getElementById('toggleCameraBtn');
-    const toggleAudioBtn = document.getElementById('toggleAudioBtn');
-    const retryBtn = document.getElementById('retryBtn');
-
     const sdpBox = document.getElementById('sdpBox');
     const localCandidatesBox = document.getElementById('localCandidatesBox');
     const remoteCandidatesBox = document.getElementById('remoteCandidatesBox');
 
-    const CONFIG = {
-      iceServers: { iceServers: [] },
-      connectTimeoutMs: 10000
-    };
-
-    let pc = null;
-    let localStream = null;
-    let connectionTimeoutId = null;
-    let _call_state = CALL_STATUS.WAITING.id;
-    Object.defineProperty(window, 'ws_state', {
-      get: function() { return _call_state; },
-      set: function(val) {
-        _call_state = val;
-        updateUiForState();
-
-        // Timeout Logic
-        if (connectionTimeoutId && val !== CALL_STATUS.CONNECTING.id) {
-          clearTimeout(connectionTimeoutId);
-          connectionTimeoutId = null;
-        }
+    const callManager = new CallManager(
+      window.CONFIG,
+      (state) => updateUi(state),
+      (candidate) => {
+        localCandidatesBox.value += JSON.stringify(candidate) + '\n';
       }
-    });
+    );
+    window.callManager = callManager;
 
-    /**
-     * 연결 상태 UI 표시
-     */
-    function updateUiForState() {
-      const stateId = CALL_STATUS[ws_state].id || '';
-      elStatusText.textContent = CALL_STATUS[ws_state].label || '';
+    function updateUi(state) {
+      document.getElementById('statusText').textContent = CALL_STATUS[state].label;
+      const btns = ['startCallBtn', 'endCallBtn', 'toggleCameraBtn', 'toggleAudioBtn', 'retryBtn'];
+      btns.forEach(id => document.getElementById(id).style.display = 'none');
+      // 통화를 거는 쪽(caller)일 때만 연결중 로딩바 표시
+      const showLoading = (state === CALL_STATUS.CONNECTING.id && callManager.role === 'caller');
+      document.getElementById('loadingOverlay').style.display = showLoading ? 'flex' : 'none';
 
-      startCallBtn.style.display = 'none';
-      endCallBtn.style.display = 'none';
-      retryBtn.style.display = 'none';
-      toggleCameraBtn.style.display = 'none';
-      toggleAudioBtn.style.display = 'none';
-
-      switch (stateId) {
-        case CALL_STATUS.WAITING.id:
-          break;
-        case CALL_STATUS.IDLE.id:
-          startCallBtn.style.display = 'block';
-          toggleAudioBtn.style.display = 'block';
-          toggleCameraBtn.style.display = 'block';
-          break;
-        case CALL_STATUS.CONNECTING.id:
-        case CALL_STATUS.CONNECTED.id:
-          endCallBtn.style.display = 'block';
-          toggleAudioBtn.style.display = 'block';
-          toggleCameraBtn.style.display = 'block';
-          break;
-        case CALL_STATUS.ERROR.id:
-          retryBtn.style.display = 'block';
-          break;
-        case CALL_STATUS.DISCONNECTED.id:
-        default:
-          break;
-      }
-      
-      // 로딩 오버레이 제어
-      const overlay = document.getElementById('loadingOverlay');
-      if (stateId === CALL_STATUS.CONNECTING.id) {
-        overlay.style.display = 'flex';
-      } else {
-        overlay.style.display = 'none';
+      if (state === CALL_STATUS.IDLE.id || state === CALL_STATUS.WAITING.id) {
+        ['startCallBtn', 'toggleCameraBtn', 'toggleAudioBtn'].forEach(id => document.getElementById(id).style.display = 'block');
+      } else if (state === CALL_STATUS.CONNECTING.id || state === CALL_STATUS.CONNECTED.id) {
+        ['endCallBtn', 'toggleCameraBtn', 'toggleAudioBtn'].forEach(id => document.getElementById(id).style.display = 'block');
+      } else if (state === CALL_STATUS.ERROR.id) {
+        document.getElementById('retryBtn').style.display = 'block';
       }
     }
 
-    /**
-     * 카메라/마이크 권한 요청
-     */
-    async function checkMediaPermissions() {
-      const cameraStatus = await navigator.permissions.query({ name: 'camera' });
-      const microphoneStatus = await navigator.permissions.query({ name: 'microphone' });
-
-      if (cameraStatus.state === 'denied') {
-        throw new Error(ERRORS.CAMERA_PERMISSION);
-      }
-      if (microphoneStatus.state === 'denied') {
-        throw new Error(ERRORS.MIC_PERMISSION);
+    async function handleCreateOffer() {
+      try {
+        callManager.state = window.CALL_STATUS.CONNECTING.id;
+        callManager.ensurePC(document.getElementById('remoteVideo'));
+        const offer = await callManager.createOffer();
+        sdpBox.value = JSON.stringify(offer);
+        document.getElementById('manualPanel').style.display = 'none';
+      } catch (e) {
+        handleError(e);
       }
     }
 
-    /**
-     * 미디어 장치 연결
-     */
-    async function getMediaStream() {
-      if (localStream) return;
-
-      const devices = await navigator.mediaDevices.enumerateDevices();
-
-      const hasCamera = devices.some(d => d.kind === 'videoinput');
-      const hasMic = devices.some(d => d.kind === 'audioinput');
-
-      if (!hasCamera) {
-        throw new Error(ERRORS.NO_CAMERA);
+    async function handleCreateAnswer() {
+      try {
+        callManager.state = window.CALL_STATUS.CONNECTING.id;
+        callManager.ensurePC(document.getElementById('remoteVideo'));
+        const remoteOffer = JSON.parse(sdpBox.value.trim());
+        const answer = await callManager.handleOffer(remoteOffer);
+        sdpBox.value = JSON.stringify(answer);
+      } catch (e) {
+        handleError(e);
       }
-      if (!hasMic) {
-        throw new Error(ERRORS.NO_MIC);
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      localStream = stream;
-      localVideo.srcObject = stream;
     }
 
-    /**
-     * RTCPeerConnection(PC) 생성
-     */
-    function ensurePC() {
-      if (pc) return;
-
-      pc = new RTCPeerConnection(CONFIG.iceServers);
-
-      if (localStream) {
-        localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+    async function handleSetRemoteAnswer() {
+      try {
+        const remoteAnswer = JSON.parse(sdpBox.value.trim());
+        await callManager.handleAnswer(remoteAnswer);
+        alert('Remote Answer 적용 완료!');
+      } catch (e) {
+        handleError(e);
       }
-
-      const remoteStream = new MediaStream();
-      remoteVideo.srcObject = remoteStream;
-
-      pc.ontrack = (event) => {
-        console.log('ontrack', event);
-        const stream = event.streams?.[0];
-
-        if (stream) {
-          stream.getTracks().forEach((t) => remoteStream.addTrack(t));
-        } else {
-          remoteStream.addTrack(event.track);
-        }
-
-        event.track.onmute = () => {
-          console.warn("Remote track muted → 수신 중단");
-          ws_state = CALL_STATUS.DISCONNECTED.id;
-        };
-
-        event.track.onended = () => {
-          console.log('Remote track ended');
-          ws_state = CALL_STATUS.DISCONNECTED.id;
-        };
-      };
-
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          localCandidatesBox.value += JSON.stringify(event.candidate) + '\n';
-        }
-      };
-
-      pc.oniceconnectionstatechange = () => {
-        console.log('ICE state:', pc.iceConnectionState);
-
-        switch (pc.iceConnectionState) {
-          case 'checking':
-            ws_state = CALL_STATUS.CONNECTING.id;
-            break;
-          case 'connected':
-          case 'completed':
-            ws_state = CALL_STATUS.CONNECTED.id;
-            break;
-          case 'failed':
-            break;
-          case 'disconnected':
-          case 'closed':
-            endCall(); // 상대방 연결이 끊어지면 내 통화도 종료
-            break;
-        }
-      };
     }
-    
-    /**
-     * 통화 종료
-     */
+
+    async function handleAddRemoteCandidates() {
+      try {
+        const lines = remoteCandidatesBox.value.split('\n').filter(l => l.trim());
+        for (const line of lines) {
+          await callManager.addIceCandidate(JSON.parse(line));
+        }
+        alert('Remote ICE candidates 적용 완료!');
+      } catch (e) {
+        handleError(e);
+      }
+    }
+
     function endCall() {
-      if (pc) {
-        pc.close();
-        pc = null;
+      const state = callManager.state;
+      const isConnectionAttempt = (state === CALL_STATUS.CONNECTING.id || state === CALL_STATUS.ERROR.id);
+      
+      callManager.stopTimeout();
+      callManager.closePC();
+
+      if (isConnectionAttempt) {
+        callManager.state = CALL_STATUS.IDLE.id;
+      } else {
+        callManager.stopMedia();
+        document.getElementById('localVideo').srcObject = null;
+        document.getElementById('remoteVideo').srcObject = null;
+        callManager.state = CALL_STATUS.DISCONNECTED.id;
       }
-      if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-        localStream = null;
-      }
+      updateUi(callManager.state);
 
-      localVideo.srcObject = null;
-      remoteVideo.srcObject = null;
-
-      ws_state = CALL_STATUS.DISCONNECTED.id; 
-
-      // UI 초기화
       sdpBox.value = '';
       localCandidatesBox.value = '';
       remoteCandidatesBox.value = '';
     }
 
-    /**
-     * 대기 상태 진입
-     */
-    async function enterWaitingState() {
+    async function init() {
       try {
-        await checkMediaPermissions();
-        await getMediaStream();
-
-        ws_state = CALL_STATUS.IDLE.id;
+        await callManager.getMediaStream(document.getElementById('localVideo'));
+        callManager.state = CALL_STATUS.IDLE.id;
       } catch (e) {
-        console.error(e);
-        alert(e.message);
-        ws_state = CALL_STATUS.ERROR.id;
+        callManager.state = window.CALL_STATUS.ERROR.id;
+        handleError(e, init);
       }
+      updateUi(callManager.state);
     }
 
-    /**
-     * 미디어 장치 제어
-     * @param {string} type 'video' | 'audio'
-     */
-    function toggleMedia(type) {
-      if (!localStream) return;
-
-      const isVideo = type === 'video';
-      const tracks = isVideo ? localStream.getVideoTracks() : localStream.getAudioTracks();
-      const track = tracks[0];
-
-      if (track) {
-        track.enabled = !track.enabled;
-        const btn = isVideo ? toggleCameraBtn : toggleAudioBtn;
-        const label = isVideo ? '카메라' : '마이크';
-        btn.textContent = `${label} ${track.enabled ? 'On' : 'Off'}`;
-      }
-    }
-
-    // Offer 생성: 수동/WS 병행
-    async function handleCreateOffer() {
-      try {
-        ws_state = CALL_STATUS.CONNECTING.id;
-
-        // Timeout Start
-        if (connectionTimeoutId) clearTimeout(connectionTimeoutId);
-        connectionTimeoutId = setTimeout(() => {
-          endCall();
-          handleError(new Error(ERRORS.CONNECTION_TIMEOUT));
-        }, CONFIG.connectTimeoutMs);
-
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        
-        ensurePC();
-    
-        sdpBox.value = JSON.stringify(pc.localDescription);
-      } catch (e) {
-        console.error(e);
-        alert(e.message);
-        ws_state = CALL_STATUS.ERROR.id;
-      }
-    };
-
-    // Answer 생성: 수동/WS 병행
-    async function handleCreateAnswer() {
-      try {
-        ensurePC();
-
-        const remoteOffer = JSON.parse(sdpBox.value.trim());
-        await pc.setRemoteDescription(new RTCSessionDescription(remoteOffer));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-    
-        sdpBox.value = JSON.stringify(pc.localDescription);
-      } catch (e) {
-        console.error(e);
-        alert(e.message);
-      }
-    }
-
-    // Remote Answer 수동 적용
-    async function handleSetRemoteAnswer() {
-      try {
-        const remoteAnswer = JSON.parse(sdpBox.value.trim());
-        await pc.setRemoteDescription(new RTCSessionDescription(remoteAnswer));
-        alert('Remote Answer 적용 완료!');
-      } catch (e) {
-        console.error(e);
-        alert(e.message);
-      }
-    }
-
-    // Remote ICE candidates 수동 적용
-    async function handleAddRemoteCandidates() {
-      try {
-        const lines = remoteCandidatesBox.value
-          .split('\n')
-          .map((l) => l.trim())
-          .filter((l) => !!l);
-
-        for (const line of lines) {
-          const candidateObj = JSON.parse(line);
-          await pc.addIceCandidate(new RTCIceCandidate(candidateObj));
-        }
-        alert('Remote ICE candidates 적용 완료!');
-      } catch (e) {
-        console.error(e);
-        alert(e.message);
-      }
-    }
-    
-    window.onload = () => {
-      updateUiForState();
-      enterWaitingState();
-    };
-    window.onbeforeunload = () => {
-      endCall();
-    };
-    window.onerror = (msg, url, line) => log('ERROR', `Global: ${msg} (${line})`);
+    window.onload = init;
+    window.onbeforeunload = endCall;
   </script>
 </body>
 </html>

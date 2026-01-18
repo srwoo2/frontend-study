@@ -10,7 +10,9 @@ class CallManager {
     this.pc = null;
     this.localStream = null;
     this.remoteStream = new MediaStream();
-    this._state = CALL_STATUS.WAITING.id;
+    this._state = window.CALL_STATUS.WAITING.id;
+    this.timeoutId = null;
+    this.pendingCandidates = []; // Buffering candidates until remoteDescription is set
   }
 
   get state() {
@@ -18,7 +20,14 @@ class CallManager {
   }
 
   set state(val) {
+    const oldState = this._state;
     this._state = val;
+
+    // 연결중(CONNECTING)이 아닌 모든 상태로 전환 시 타임아웃 해제
+    if (val !== window.CALL_STATUS.CONNECTING.id) {
+      this.stopTimeout();
+    }
+
     if (this.onStateChange) this.onStateChange(val);
   }
 
@@ -28,18 +37,47 @@ class CallManager {
   async getMediaStream(localVideoElement) {
     if (this.localStream) return this.localStream;
 
-    const stream = await navigator.mediaDevices.getUserMedia({ 
-      video: true, 
-      audio: true
-    });
-    this.localStream = stream;
+    try {
+      // 0. 보안 컨텍스트 확인 (HTTPS 혹은 localhost 필수)
+      if (!window.isSecureContext) {
+        throw new Error(window.ERRORS.MEDIA_SECURE_CONTEXT);
+      }
 
-    if (localVideoElement) {
-      // 로컬 화면용으로 비디오 트랙만 따로 뽑은 새로운 스트림 적용 (현상 방지)
-      const videoOnlyStream = new MediaStream(stream.getVideoTracks());
-      localVideoElement.srcObject = videoOnlyStream;
+      // 1. 사전 체크: 장치 존재 여부 확인
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const hasVideo = devices.some(d => d.kind === 'videoinput');
+      const hasAudio = devices.some(d => d.kind === 'audioinput');
+
+      if (!hasVideo) throw new Error(window.ERRORS.MEDIA_NO_CAMERA);
+      if (!hasAudio) throw new Error(window.ERRORS.MEDIA_NO_MIC);
+
+      // 2. 스트림 획득 시도
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: true, 
+        audio: true
+      });
+      this.localStream = stream;
+
+      if (localVideoElement) {
+        // 로컬 화면용으로 비디오 트랙만 따로 뽑은 새로운 스트림 적용 (현상 방지)
+        const videoOnlyStream = new MediaStream(stream.getVideoTracks());
+        localVideoElement.srcObject = videoOnlyStream;
+      }
+      return stream;
+    } catch (e) {
+      console.error('Media Access Error:', e);
+      
+      // Native Error Mapping
+      if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+        throw new Error(window.ERRORS.MEDIA_PERMISSION); // 권한 거부
+      } else if (e.name === 'NotFoundError' || e.name === 'DevicesNotFoundError') {
+        throw new Error(window.ERRORS.MEDIA_NO_CAMERA); // 장치 없음
+      } else if (e.name === 'NotReadableError' || e.name === 'TrackStartError') {
+        throw new Error(window.ERRORS.MEDIA_IN_USE);
+      }
+      
+      throw e; // 이미 매핑된 window.ERRORS 혹은 기타 에러 그대로 상위 전달
     }
-    return stream;
   }
 
   /**
@@ -65,16 +103,6 @@ class CallManager {
       } else {
         this.remoteStream.addTrack(event.track);
       }
-
-      event.track.onmute = () => {
-        console.warn("Remote track muted");
-        this.state = CALL_STATUS.DISCONNECTED.id;
-      };
-
-      event.track.onended = () => {
-        console.log('Remote track ended');
-        this.state = CALL_STATUS.DISCONNECTED.id;
-      };
     };
 
     this.pc.onicecandidate = (event) => {
@@ -117,22 +145,56 @@ class CallManager {
     await this.pc.setRemoteDescription(new RTCSessionDescription(offer));
     const answer = await this.pc.createAnswer();
     await this.pc.setLocalDescription(answer);
+    await this.processPendingCandidates(); // Flush queue
     return answer;
   }
 
   async handleAnswer(answer) {
-    if (!this.pc.remoteDescription) {
+    if (this.pc && this.pc.signalingState === 'have-local-offer') {
       await this.pc.setRemoteDescription(new RTCSessionDescription(answer));
+      await this.processPendingCandidates(); // Flush queue
+    }
+  }
+
+  async processPendingCandidates() {
+    if (!this.pc || !this.pc.remoteDescription) return;
+    
+    console.log(`[CallManager] Processing ${this.pendingCandidates.length} pending ICE candidates.`);
+    while (this.pendingCandidates.length > 0) {
+      const candidate = this.pendingCandidates.shift();
+      try {
+        await this.pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (e) {
+        console.error('[CallManager] Error adding queued ICE candidate:', e);
+      }
     }
   }
 
   async addIceCandidate(candidate) {
-    if (this.pc) {
-      await this.pc.addIceCandidate(new RTCIceCandidate(candidate));
+    if (!this.pc || !candidate) return;
+
+    // remoteDescription이 아직 설정되지 않았다면 큐에 보관 (InvalidStateError 방지)
+    if (!this.pc.remoteDescription) {
+      console.log('[CallManager] Remote description null. Queuing ICE candidate.');
+      this.pendingCandidates.push(candidate);
+      return;
+    }
+
+    try {
+      // sdpMid나 sdpMLineIndex가 둘 다 null이면 유효하지 않은 후보이므로 무시 (Chrome 등에서 발생 가능)
+      if (candidate.candidate && (candidate.sdpMid !== null || candidate.sdpMLineIndex !== null)) {
+        await this.pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } else {
+        console.warn('[CallManager] Skipping malformed or empty ICE candidate:', candidate);
+      }
+    } catch (e) {
+      console.error('[CallManager] Error adding ICE candidate:', e);
     }
   }
 
   closePC() {
+    this.stopTimeout();
+    this.pendingCandidates = []; // Clear queue
     if (this.pc) {
       this.pc.close();
       this.pc = null;
@@ -143,6 +205,77 @@ class CallManager {
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => track.stop());
       this.localStream = null;
+    }
+  }
+
+  /**
+   * 미디어 장치 제어
+   * @param {string} type 'video' | 'audio'
+   */
+  toggleMedia(type) {
+    if (!this.localStream) return;
+
+    const isVideo = type === 'video';
+    const tracks = isVideo ? this.localStream.getVideoTracks() : this.localStream.getAudioTracks();
+    const track = tracks[0];
+
+    if (track) {
+      track.enabled = !track.enabled;
+      
+      // UI 업데이트용 버블링/커스텀 이벤트나 콜백은 생략하고 
+      // 개별 페이지에서 처리하도록 버튼 텍스트 변경 로직은 유도
+      const btnId = isVideo ? 'toggleCameraBtn' : 'toggleAudioBtn';
+      const btn = document.getElementById(btnId);
+      if (btn) {
+        const label = isVideo ? '카메라' : '마이크';
+        btn.textContent = `${label} ${track.enabled ? 'On' : 'Off'}`;
+      }
+      return track.enabled;
+    }
+    return false;
+  }
+
+  /**
+   * 연결 타임아웃 시작
+   * @param {number} ms 타임아웃 시간
+   * @param {function} onTimeout 타임아웃 시 콜백
+   * @param {function} onCountdown 카운트다운 콜백 (1초마다 실행)
+   */
+  startTimeout(ms, onTimeout, onCountdown) {
+    this.stopTimeout();
+    
+    let remaining = Math.ceil(ms / 1000);
+    if (onCountdown) onCountdown(remaining);
+
+    this.countdownInterval = setInterval(() => {
+      remaining -= 1;
+      if (remaining > 0 && onCountdown) {
+        onCountdown(remaining);
+      }
+      if (remaining <= 0) {
+        // 타이머 표시 종료 - 하지만 실제 타임아웃은 setTimeout이 책임짐
+        clearInterval(this.countdownInterval);
+        this.countdownInterval = null;
+      }
+    }, 1000);
+
+    this.timeoutId = setTimeout(() => {
+      this.stopTimeout();
+      if (onTimeout) onTimeout();
+    }, ms);
+  }
+
+  /**
+   * 연결 타임아웃 중지
+   */
+  stopTimeout() {
+    if (this.timeoutId) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = null;
+    }
+    if (this.countdownInterval) {
+      clearInterval(this.countdownInterval);
+      this.countdownInterval = null;
     }
   }
 }
