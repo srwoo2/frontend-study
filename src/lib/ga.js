@@ -6,7 +6,6 @@ export const trackPageview = (path) => {
   window.gtag('config', GA_ID, {
     page_path: path,
   });
-  console.log(`[GA] Tracked pageview: ${path}`);
 };
 
 const initGA = () => {
