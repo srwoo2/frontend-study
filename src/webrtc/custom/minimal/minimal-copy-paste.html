@@ -188,6 +188,7 @@
     }
 
     async function init() {
+      updateUi(callManager.state); // Show initial WAITING state
       try {
         await callManager.getMediaStream(document.getElementById('localVideo'));
         callManager.state = CALL_STATUS.IDLE.id;
@@ -195,7 +196,6 @@
         callManager.state = window.CALL_STATUS.ERROR.id;
         handleError(e, init);
       }
-      updateUi(callManager.state);
     }
 
     window.onload = init;

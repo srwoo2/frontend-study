@@ -214,6 +214,7 @@
     });
 
     async function init() {
+      updateUi(callManager.state); // Show initial WAITING state
       try {
         await callManager.getMediaStream(document.getElementById('localVideo'));
         callManager.state = window.CALL_STATUS.IDLE.id;
@@ -221,7 +222,6 @@
         callManager.state = window.CALL_STATUS.ERROR.id;
         window.handleError(e, init);
       }
-      updateUi(callManager.state); // Sync initial/after-media UI
     }
 
     init(); // 직접 호출 (module은 지연 실행되므로 window.onload 대신 직접 수행이 더 확실)
