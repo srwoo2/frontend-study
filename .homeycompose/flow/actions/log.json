@@ -9,6 +9,9 @@
     {
       "type": "text",
       "name": "usertext",
+      "title": {
+        "en": "Text to log"
+      },
       "placeholder": {
         "en": "Type some text"
       }

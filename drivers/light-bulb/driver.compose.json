@@ -8,12 +8,17 @@
     "onoff"
   ],
   "platforms": ["local", "cloud"],
+  "connectivity": [],
   "images": {
     "small": "{{driverAssetsPath}}/images/small.png",
     "large": "{{driverAssetsPath}}/images/large.png",
     "xlarge": "{{driverAssetsPath}}/images/xlarge.png"
   },
   "pair": [
+    {
+      "id": "login_oauth2",
+      "template": "login_oauth2"
+    },
     {
       "id": "list_devices",
       "template": "list_devices",

@@ -10,6 +10,11 @@
     "local",
     "cloud"
   ],
+  "energy": {
+    "batteries": [
+      "CR2032"
+    ]
+  },
   "connectivity": [],
   "images": {
     "small": "{{driverAssetsPath}}/images/small.png",
