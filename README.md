@@ -1,20 +1,22 @@
-# react-basic-project
-
-## Homey App SDK
+## Homey CLI
 ```
-$ npm install homey
+$ npm install -g homey
 ```
 ```
 $ homey login
+$ homey list
 ```
 ```
 $ homey app create
 ```
 ```
+# app.json 경로에서 접근
+$ node -v
+$ npm install
 $ homey app run
 ```
 
-## App for Homey  GitHub
+## App for Homey GitHub
 - mipow : https://github.com/athombv/com.mipow-example
 - mihomey : https://github.com/Maxmudjon/com.maxmudjon.mihomey/tree/master
 - tuya ** : https://github.com/athombv/com.tuya

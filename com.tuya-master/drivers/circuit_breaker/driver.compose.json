@@ -1,9 +1,0 @@
-{
-  "$extends": "tuya",
-  "class": "socket",
-  "name": {
-    "en": "Circuit Breaker",
-    "nl": "Zekering"
-  },
-  "capabilities": ["onoff", "measure_current", "measure_power", "measure_voltage"]
-}

@@ -1,9 +1,0 @@
-{
-  "name": "com.athom.hello",
-  "version": "1.0.0",
-  "scripts": {
-    "validate": "homey app validate --level=verified",
-    "start": "homey app run"
-  },
-  "devDependencies": {}
-}
