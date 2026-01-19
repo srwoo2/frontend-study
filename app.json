@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "compatibility": ">=12.4.0",
   "sdk": 3,
+  "brandColor": "#FF0000",
   "platforms": [
     "local",
     "cloud"
@@ -74,6 +75,9 @@
           {
             "type": "text",
             "name": "usertext",
+            "title": {
+              "en": "Text to log"
+            },
             "placeholder": {
               "en": "Type some text"
             }
@@ -115,6 +119,11 @@
         "local",
         "cloud"
       ],
+      "energy": {
+        "batteries": [
+          "CR2032"
+        ]
+      },
       "connectivity": [],
       "images": {
         "small": "/drivers/button/assets/images/small.png",
@@ -152,6 +161,7 @@
         "local",
         "cloud"
       ],
+      "connectivity": [],
       "images": {
         "small": "/drivers/light-bulb/assets/images/small.png",
         "large": "/drivers/light-bulb/assets/images/large.png",
