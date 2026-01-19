@@ -1,11 +1,14 @@
-const Homey = require('homey'); 
+'use strict';
 
-module.exports = class MyDevice extends Homey.Device {
+const { OAuth2Device } = require('homey-oauth2app');
+
+module.exports = class MyDevice extends OAuth2Device {
 
   /**
    * onInit is called when the device is initialized.
    */
   async onInit() {
+    await super.onInit();
     this.log('LigntBulb MyDevice has been initialized');
     
     this.registerCapabilityListener('onoff', async (value) => {

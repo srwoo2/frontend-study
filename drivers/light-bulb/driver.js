@@ -1,11 +1,14 @@
-const Homey = require('homey'); 
+'use strict';
 
-module.exports = class MyDriver extends Homey.Driver {
+const { OAuth2Driver } = require('homey-oauth2app');
+
+module.exports = class MyDriver extends OAuth2Driver {
 
   /**
    * onInit is called when the driver is initialized.
    */
   async onInit() {
+    await super.onInit();
     this.log('MyDriver has been initialized');
 
     const card = this.homey.flow.getActionCard('blink-the-light');
