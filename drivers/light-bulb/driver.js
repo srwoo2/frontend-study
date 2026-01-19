@@ -22,27 +22,16 @@ module.exports = class MyDriver extends OAuth2Driver {
    * 페어링 가능한 장치의 데이터가 포함된 배열을 반환해야 합니다.
    * @returns 
    */
-  async onPairListDevices() {
+  async onPairListDevices({ oAuth2Client }) {
     this.log('onPairListDevices called');
-  
-    return [
-      // Example device data, note that `store` is optional
-      {
-        name: 'My Light Bulg',
-        data: {
-          id: 'my-device-001',
-        },
-        // store: {
-        //   address: '127.0.0.1',
-        // },
+    const devices = await oAuth2Client.getDevices();
+
+    return devices.map(device => ({
+      name: device.label || device.name,
+      data: {
+        deviceId: device.deviceId,
       },
-      {
-        name: 'Dummy Switch',
-        data: {
-          id: 'dummy-device-002',
-        },
-      },
-    ];
+    }));
   }
 
 };

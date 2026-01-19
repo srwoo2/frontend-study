@@ -7,6 +7,8 @@ class MyApp extends OAuth2App {
 
   static OAUTH2_CLIENT = MyOAuth2Client;
   static OAUTH2_DRIVERS = ['light-bulb']; // 우리 앱의 여러 기능(드라이버) 중에서 어떤 것들만 OAuth2 인증 방식을 사용할 것인가...
+  
+  static API_INTEGRATED = false; // true: 실제 API 연동, false: metadata.js 더미 데이터 사용
 
   /**
    * onInit is called when the app is initialized.
