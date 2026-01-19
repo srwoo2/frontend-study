@@ -4,5 +4,8 @@
   },
   "1.0.1": {
     "en": "ci: add Homey app version workflow"
+  },
+  "1.0.2": {
+    "en": "Merge pull request #41 from srwoo2/homey\n\nfeat: Homey 인증(OAuth2) 추가"
   }
 }
