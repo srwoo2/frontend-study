@@ -1,11 +1,12 @@
 {
   "id": "com.athom.hello",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "compatibility": ">=12.4.0",
   "sdk": 3,
   "brandColor": "#FF0000",
   "platforms": [
-    "local", "cloud" 
+    "local",
+    "cloud"
   ],
   "name": {
     "en": "Hello",
