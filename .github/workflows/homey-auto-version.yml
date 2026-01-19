@@ -1,0 +1,42 @@
+name: Auto Update Homey App Version
+
+on:
+  push:
+    branches:
+      - homey
+    paths-ignore:
+      - '.homeychangelog.json'
+      - 'app.json'
+      - '.homeycompose/app.json'
+
+permissions:
+  contents: write
+
+jobs:
+  update-version:
+    name: Auto Update Homey Version & Changelog
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, 'chore: update version')"
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Update Homey App Version
+        uses: athombv/github-action-homey-app-version@master
+        id: update_app_version
+        with:
+          version: patch
+          changelog: ${{ github.event.head_commit.message }}
+
+      - name: Commit & Push Changes
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          git add .
+          git commit -m "chore: update version to v${{ steps.update_app_version.outputs.version }} [skip ci]"
+          git push origin HEAD
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
