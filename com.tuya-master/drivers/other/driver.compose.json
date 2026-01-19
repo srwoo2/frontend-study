@@ -1,8 +1,0 @@
-{
-  "$extends": "tuya",
-  "class": "other",
-  "name": {
-    "en": "Other",
-    "nl": "Onbekend"
-  }
-}

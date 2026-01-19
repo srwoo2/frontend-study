@@ -1,9 +1,0 @@
-{
-  "$extends": "tuya",
-  "class": "sensor",
-  "name": {
-    "en": "Motion Sensor",
-    "nl": "Bewegingssensor"
-  },
-  "capabilities": ["alarm_motion"]
-}

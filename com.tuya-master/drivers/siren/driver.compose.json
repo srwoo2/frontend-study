@@ -1,9 +1,0 @@
-{
-  "$extends": "tuya",
-  "class": "siren",
-  "name": {
-    "en": "Siren",
-    "nl": "Sirene"
-  },
-  "capabilities": ["onoff"]
-}

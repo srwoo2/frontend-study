@@ -1,9 +1,0 @@
-{
-  "$extends": "tuya",
-  "class": "garagedoor",
-  "name": {
-    "en": "Garage Door",
-    "nl": "Garagedeur"
-  },
-  "capabilities": ["garagedoor_closed", "alarm_contact"]
-}

@@ -1,9 +1,0 @@
-{
-  "$extends": "tuya",
-  "class": "socket",
-  "name": {
-    "en": "Plug",
-    "nl": "Plug"
-  },
-  "capabilities": ["onoff", "measure_power"]
-}

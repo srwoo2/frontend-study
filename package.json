@@ -1,18 +1,9 @@
 {
-  "name": "frontend-study",
+  "name": "com.athom.hello",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
   "scripts": {
-    "start": "echo \"Server Start\"",
-    "env": "cross-env echo \"token=$PROJECT_TOKEN\"",
-    "homey": "homey login"
+    "validate": "homey app validate --level=verified",
+    "start": "homey app run"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "cross-env": "^7.0.3",
-    "homey": "^3.9.4"
-  }
+  "devDependencies": {}
 }

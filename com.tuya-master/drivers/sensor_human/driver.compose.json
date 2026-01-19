@@ -1,9 +1,0 @@
-{
-  "$extends": "tuya",
-  "class": "sensor",
-  "name": {
-    "en": "Human Presence Sensor",
-    "nl": "Menselijke Aanwezigheid Sensor"
-  },
-  "capabilities": ["alarm_human"]
-}

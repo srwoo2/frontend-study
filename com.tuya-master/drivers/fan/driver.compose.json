@@ -1,8 +1,0 @@
-{
-  "$extends": "tuya",
-  "class": "fan",
-  "name": {
-    "en": "Fan"
-  },
-  "capabilities": ["onoff", "dim"]
-}
