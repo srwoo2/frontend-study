@@ -1,13 +1,10 @@
 name: Update Homey App Version on PR Merge
 
 on:
-  push:
+  pull_request:
+    types: [closed]
     branches:
       - homey
-    paths-ignore:
-      - '.homeychangelog.json'
-      - 'app.json'
-      - '.homeycompose/app.json'
 
 permissions:
   contents: write
@@ -15,8 +12,8 @@ permissions:
 jobs:
   update-version:
     if: |
+      github.event.pull_request.merged == true &&
       github.repository == 'selim0915/tech-study' &&
-      !contains(github.event.head_commit.message, 'chore: update version')
     runs-on: ubuntu-latest
 
     steps:
@@ -27,7 +24,7 @@ jobs:
       - name: Determine version bump type
         id: version
         run: |
-          PR_TITLE=$(git log -1 --pretty=%B)
+          PR_TITLE="${{ github.event.pull_request.title }}"
 
           if echo "$PR_TITLE" | grep -iq "BREAKING"; then
             echo "type=major" >> $GITHUB_OUTPUT
