@@ -1,5 +1,8 @@
 {
   "3.0.0": {
     "en": "First version!"
+  },
+  "3.0.1": {
+    "en": "Merge pull request #46 from srwoo2/homey\n\n[PR] ci: add Homey app version workflow5"
   }
 }
