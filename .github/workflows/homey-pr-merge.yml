@@ -16,7 +16,7 @@ jobs:
   update-version:
     if: |
       github.repository == 'selim0915/tech-study' &&
-      "!contains(github.event.head_commit.message, 'chore: update version')"
+      !contains(github.event.head_commit.message, 'chore: update version')
     runs-on: ubuntu-latest
 
     steps:
