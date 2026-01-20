@@ -1,5 +1,13 @@
 name: Update Homey App Version
 on:
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '.homeychangelog.json'
+      - 'app.json'
+      - '.homeycompose/app.json'
+      
   workflow_dispatch:
     inputs:
       version:
