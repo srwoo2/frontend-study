@@ -4,5 +4,8 @@
   },
   "3.0.1": {
     "en": "Merge pull request #46 from srwoo2/homey\n\n[PR] ci: add Homey app version workflow5"
+  },
+  "3.0.2": {
+    "en": "Merge pull request #49 from srwoo2/homey\n\nci: add Homey app version workflow8"
   }
 }
