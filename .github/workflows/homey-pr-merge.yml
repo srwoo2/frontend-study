@@ -13,7 +13,7 @@ jobs:
   update-version:
     if: |
       github.event.pull_request.merged == true &&
-      github.repository == 'selim0915/tech-study' &&
+      github.repository == 'selim0915/tech-study'
     runs-on: ubuntu-latest
 
     steps:
@@ -53,4 +53,4 @@ jobs:
           git add .
           git commit -m "chore: update version to v${{ steps.update_app_version.outputs.version }} [skip ci]"
           git tag "v${{ steps.update_app_version.outputs.version }}"
-          git push origin HEAD --tags
+          git push origin HEAD:homey --tags
